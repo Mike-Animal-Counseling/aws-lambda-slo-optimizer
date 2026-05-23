@@ -24,6 +24,7 @@ from lambdaopt.benchmark.plan import BenchmarkPlan, create_benchmark_plan
 from lambdaopt.benchmark.result_collector import CLIENT_OBSERVED_DURATION_WARNING
 from lambdaopt.benchmark.runner import CURRENT_CONFIG_ONLY_WARNING, run_current_config_benchmark
 from lambdaopt.config import LambdaOptConfig, get_version, load_benchmark_results, load_config
+from lambdaopt.dashboard.app import launch_dashboard
 from lambdaopt.exceptions import LambdaOptError, LambdaOptSafetyError
 from lambdaopt.logging_config import configure_logging
 from lambdaopt.models import AnalyzedConfig, BenchmarkResult, Recommendation
@@ -527,6 +528,27 @@ def watch(
     typer.echo(f"Action: {decision.action}")
     typer.echo(f"Reasoning: {decision.reasoning}")
     typer.echo("No production infrastructure was mutated.")
+
+
+@app.command()
+def dashboard(
+    report_dir: Annotated[
+        Path,
+        typer.Option(
+            "--report",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+            readable=True,
+            help="LambdaOpt report directory to open.",
+        ),
+    ],
+) -> None:
+    """Open the optional Streamlit dashboard for a LambdaOpt report directory."""
+    try:
+        launch_dashboard(report_dir)
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
 
 
 def _print_benchmark_plan(

@@ -41,6 +41,9 @@ aws = [
 charts = [
   "matplotlib>=3.8",
 ]
+dashboard = [
+  "streamlit>=1.36",
+]
 dev = [
   "build>=1.2",
   "matplotlib>=3.8",
@@ -92,4 +95,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["streamlit.*"]
 ignore_missing_imports = true
