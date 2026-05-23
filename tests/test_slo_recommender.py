@@ -58,8 +58,9 @@ def test_recommender_picks_cheapest_passing_config() -> None:
 
     assert recommendation.recommended_config.memory_mb == 1024
     assert recommendation.confidence == 0.9
-    assert "512MB x86_64 rejected because p95 320ms exceeds target 250ms" in (
-        recommendation.rejected_reasons["512mb-x86_64-pc0"]
+    assert (
+        "512MB x86_64 rejected because p95 320ms exceeds target 250ms"
+        in (recommendation.rejected_reasons["512mb-x86_64-pc0"])
     )
     assert "costs 50% more" in recommendation.rejected_reasons["1536mb-arm64-pc0"]
 

@@ -59,9 +59,7 @@ def _validate_memory_sizes(memory_sizes: list[int]) -> None:
 def _validate_provisioned_concurrency_options(options: list[int]) -> None:
     for option in options:
         if option < 0:
-            raise LambdaOptValidationError(
-                "provisioned concurrency options must be non-negative."
-            )
+            raise LambdaOptValidationError("provisioned concurrency options must be non-negative.")
 
 
 def _deduplicate_configs(configs: list[LambdaConfig]) -> list[LambdaConfig]:

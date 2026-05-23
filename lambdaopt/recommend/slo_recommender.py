@@ -135,8 +135,7 @@ def _confidence_for_passing_config(
         if config.latency.p95_ms <= recommended.latency.p95_ms * 1.05 and config.errors == 0
     ]
     clear_cost_winner = all(
-        config == recommended
-        or config.cost.total_cost_usd >= recommended.cost.total_cost_usd * 1.1
+        config == recommended or config.cost.total_cost_usd >= recommended.cost.total_cost_usd * 1.1
         for config in passing_configs
     )
 

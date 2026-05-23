@@ -97,9 +97,7 @@ def compare_architecture_pair(
         )
     elif arm64_cheaper:
         status = "risky_due_to_slower_latency"
-        reasoning = (
-            "arm64 is lower cost but benchmarked latency does not safely satisfy the SLO."
-        )
+        reasoning = "arm64 is lower cost but benchmarked latency does not safely satisfy the SLO."
     else:
         status = "risky_due_to_slower_latency"
         reasoning = "arm64 is not clearly lower cost for this memory size."
@@ -149,8 +147,7 @@ def _find_config(
         (
             config
             for config in analyzed_configs
-            if config.config.memory_mb == memory_mb
-            and config.config.architecture == architecture
+            if config.config.memory_mb == memory_mb and config.config.architecture == architecture
         ),
         None,
     )

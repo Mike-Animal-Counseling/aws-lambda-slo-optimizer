@@ -71,10 +71,7 @@ def test_cloudwatch_client_fetches_lambda_metric_queries() -> None:
     assert metrics.function_name == "my-function"
     assert metrics.series["invocations"].points[0].value == 10
     assert metrics.series["duration_p95"].points[0].value == 250
-    metric_names = {
-        query["MetricStat"]["Metric"]["MetricName"]
-        for query in fake.last_queries
-    }
+    metric_names = {query["MetricStat"]["Metric"]["MetricName"] for query in fake.last_queries}
     assert {
         "Invocations",
         "Duration",

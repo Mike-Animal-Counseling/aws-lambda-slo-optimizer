@@ -1,7 +1,7 @@
-.PHONY: install test lint format typecheck check
+.PHONY: install test lint format format-check typecheck build check
 
 install:
-	python -m pip install -e ".[dev]"
+	python -m pip install -e ".[dev,aws,charts]"
 
 test:
 	python -m pytest
@@ -12,8 +12,13 @@ lint:
 format:
 	python -m ruff format .
 
+format-check:
+	python -m ruff format --check .
+
 typecheck:
 	python -m mypy
 
-check: lint typecheck test
+build:
+	python -m build
 
+check: format-check lint typecheck test build

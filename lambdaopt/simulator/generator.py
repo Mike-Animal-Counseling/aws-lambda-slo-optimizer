@@ -69,11 +69,7 @@ def _generate_latency_samples(
     rng: Random,
 ) -> tuple[list[float], int]:
     warm_mean_ms = _warm_mean_latency_ms(profile, memory_mb, architecture)
-    cold_starts = (
-        max(1, round(samples * profile.cold_start_rate))
-        if profile.cold_start_rate
-        else 0
-    )
+    cold_starts = max(1, round(samples * profile.cold_start_rate)) if profile.cold_start_rate else 0
     cold_indexes = set(rng.sample(range(samples), cold_starts)) if cold_starts else set()
 
     latencies: list[float] = []

@@ -41,10 +41,7 @@ def test_io_bound_latency_changes_less_than_cpu_bound() -> None:
 
 def test_cold_start_heavy_has_cold_start_rate_and_warning() -> None:
     results, warnings = replay_workload(workload="cold-start-heavy", samples=100, seed=123)
-    cold_start_rates = [
-        result.cold_starts / len(result.raw_latencies_ms)
-        for result in results
-    ]
+    cold_start_rates = [result.cold_starts / len(result.raw_latencies_ms) for result in results]
 
     assert max(cold_start_rates) > 0
     assert COLD_START_RISK_WARNING in warnings
@@ -80,9 +77,7 @@ def test_simulate_command_creates_report(tmp_path: Path) -> None:
 
 
 def _average_p95_for_memory(results: list[BenchmarkResult], memory_mb: int) -> float:
-    matching_results = [
-        result for result in results if result.config.memory_mb == memory_mb
-    ]
+    matching_results = [result for result in results if result.config.memory_mb == memory_mb]
     p95_values = [
         calculate_latency_stats(result.raw_latencies_ms, target_ms=500).p95_ms
         for result in matching_results

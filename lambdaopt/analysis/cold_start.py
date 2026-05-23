@@ -77,9 +77,7 @@ def analyze_cold_starts_from_messages(
 ) -> ColdStartAnalysis:
     """Analyze cold starts from raw Lambda REPORT log messages."""
     records = [
-        record
-        for message in messages
-        if (record := parse_report_log_line(message)) is not None
+        record for message in messages if (record := parse_report_log_line(message)) is not None
     ]
     if not records:
         return ColdStartAnalysis(

@@ -427,9 +427,7 @@ def analyze(
                     observed_p99_ms=_latest_metric_value(metrics, "duration_p99"),
                 )
             except LambdaOptError as exc:
-                log_warnings.append(
-                    f"CloudWatch Logs cold-start analysis was skipped: {exc}"
-                )
+                log_warnings.append(f"CloudWatch Logs cold-start analysis was skipped: {exc}")
         analysis = analyze_cloudwatch_metrics(
             metrics=metrics,
             current_config=function_configuration.config,
@@ -439,9 +437,7 @@ def analyze(
             cold_start_analysis=cold_start_analysis,
         )
         if log_warnings:
-            analysis = analysis.model_copy(
-                update={"warnings": [*analysis.warnings, *log_warnings]}
-            )
+            analysis = analysis.model_copy(update={"warnings": [*analysis.warnings, *log_warnings]})
         output_dir.mkdir(parents=True, exist_ok=True)
         write_cloudwatch_analysis_report(
             analysis=analysis,

@@ -165,6 +165,5 @@ def _extract_result_items(payload: object, source: Path) -> list[Any]:
             return results
 
     raise DataLoadError(
-        "Benchmark results JSON must be an array or an object with a 'results' array: "
-        f"{source}"
+        f"Benchmark results JSON must be an array or an object with a 'results' array: {source}"
     )

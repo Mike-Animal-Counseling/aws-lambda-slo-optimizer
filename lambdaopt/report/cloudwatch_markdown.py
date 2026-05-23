@@ -76,8 +76,7 @@ def render_cloudwatch_analysis_report(
         "",
         f"- Estimated monthly requests: {analysis.cost_estimate.monthly_requests:,}",
         f"- Estimated monthly cost: ${analysis.cost_estimate.total_cost_usd:.2f}",
-        f"- Cost per million requests: "
-        f"${analysis.cost_estimate.cost_per_million_requests_usd:.2f}",
+        f"- Cost per million requests: ${analysis.cost_estimate.cost_per_million_requests_usd:.2f}",
         "",
         "## Recommendations",
         "",
@@ -161,8 +160,7 @@ def _provisioned_concurrency_section(analysis: CloudWatchAnalysis) -> str:
         [
             f"- Recommended PC: {recommendation.recommended_provisioned_concurrency}",
             f"- Expected benefit: {recommendation.expected_benefit}",
-            f"- Peak-window monthly cost impact: "
-            f"${recommendation.monthly_cost_impact_usd:.2f}",
+            f"- Peak-window monthly cost impact: ${recommendation.monthly_cost_impact_usd:.2f}",
             f"- Peak-window total estimate: ${recommendation.peak_window_cost_usd:.2f}",
             f"- Always-on total estimate: ${recommendation.always_on_cost_usd:.2f}",
             f"- Reasoning: {recommendation.reasoning}",

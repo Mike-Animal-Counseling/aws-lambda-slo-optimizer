@@ -83,8 +83,7 @@ class LambdaClient:
         config = payload or self._get_configuration_payload(function_name)
         raw_architectures = config.get("Architectures") or ["x86_64"]
         architectures = [
-            _parse_architecture(architecture)
-            for architecture in cast(list[str], raw_architectures)
+            _parse_architecture(architecture) for architecture in cast(list[str], raw_architectures)
         ]
         return architectures or ["x86_64"]
 
