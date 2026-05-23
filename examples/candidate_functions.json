@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "function_name": "my-fn-512-x86-test",
+      "memory_mb": 512,
+      "architecture": "x86_64"
+    },
+    {
+      "function_name": "my-fn-1024-arm-test",
+      "memory_mb": 1024,
+      "architecture": "arm64"
+    },
+    {
+      "function_name": "my-fn-1536-x86-test",
+      "memory_mb": 1536,
+      "architecture": "x86_64"
+    },
+    {
+      "function_name": "my-fn-2048-arm-test",
+      "memory_mb": 2048,
+      "architecture": "arm64"
+    }
+  ]
+}

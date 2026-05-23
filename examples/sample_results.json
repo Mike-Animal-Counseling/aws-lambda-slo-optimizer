@@ -1,0 +1,122 @@
+{
+  "schema_version": "0.1",
+  "description": "Synthetic local benchmark results for LambdaOpt development.",
+  "slo": {
+    "percentile": "p95",
+    "threshold_ms": 250
+  },
+  "results": [
+    {
+      "config": {
+        "memory_mb": 512,
+        "architecture": "x86_64",
+        "timeout_seconds": 10,
+        "provisioned_concurrency": 0
+      },
+      "raw_latencies_ms": [
+        196.4,
+        207.8,
+        215.1,
+        221.3,
+        229.6,
+        238.2,
+        254.7,
+        273.9,
+        318.5,
+        391.2
+      ],
+      "cold_starts": 3,
+      "errors": 0,
+      "metadata": {
+        "label": "512MB x86_64 failing p95",
+        "expected_slo_passed": false,
+        "notes": "Lower memory keeps compute cost down but cold starts push tail latency above target."
+      }
+    },
+    {
+      "config": {
+        "memory_mb": 1024,
+        "architecture": "arm64",
+        "timeout_seconds": 10,
+        "provisioned_concurrency": 0
+      },
+      "raw_latencies_ms": [
+        112.9,
+        118.4,
+        123.7,
+        129.2,
+        134.6,
+        141.8,
+        149.5,
+        158.1,
+        171.3,
+        189.6
+      ],
+      "cold_starts": 1,
+      "errors": 0,
+      "metadata": {
+        "label": "1024MB arm64 passing p95 and low cost",
+        "expected_slo_passed": true,
+        "expected_cost_profile": "low",
+        "notes": "Good tail latency with arm64 efficiency and no provisioned concurrency."
+      }
+    },
+    {
+      "config": {
+        "memory_mb": 1536,
+        "architecture": "x86_64",
+        "timeout_seconds": 10,
+        "provisioned_concurrency": 0
+      },
+      "raw_latencies_ms": [
+        93.5,
+        98.1,
+        103.4,
+        108.9,
+        115.0,
+        121.6,
+        131.2,
+        144.8,
+        162.7,
+        184.5
+      ],
+      "cold_starts": 1,
+      "errors": 0,
+      "metadata": {
+        "label": "1536MB x86_64 passing p95 but higher cost",
+        "expected_slo_passed": true,
+        "expected_cost_profile": "medium",
+        "notes": "Lower latency than the 1024MB option, but likely not worth the extra cost for a 250ms p95 SLO."
+      }
+    },
+    {
+      "config": {
+        "memory_mb": 2048,
+        "architecture": "arm64",
+        "timeout_seconds": 10,
+        "provisioned_concurrency": 1
+      },
+      "raw_latencies_ms": [
+        78.2,
+        82.5,
+        85.9,
+        89.4,
+        94.0,
+        99.7,
+        106.3,
+        113.8,
+        127.1,
+        145.6
+      ],
+      "cold_starts": 0,
+      "errors": 0,
+      "metadata": {
+        "label": "2048MB arm64 passing but dominated or not cost-effective",
+        "expected_slo_passed": true,
+        "expected_cost_profile": "high",
+        "expected_dominated": true,
+        "notes": "Fastest option in the fixture, but provisioned concurrency and extra memory are excessive for the SLO."
+      }
+    }
+  ]
+}

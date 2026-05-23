@@ -1,0 +1,746 @@
+"""Command-line interface for LambdaOpt."""
+
+import json
+import traceback
+from pathlib import Path
+from typing import Annotated, Literal, NoReturn
+
+import typer
+
+from lambdaopt.analysis.cloudwatch_analysis import analyze_cloudwatch_metrics
+from lambdaopt.analysis.cold_start import analyze_cold_starts_from_messages
+from lambdaopt.analysis.cost_model import estimate_lambda_cost
+from lambdaopt.analysis.latency import calculate_latency_stats
+from lambdaopt.analysis.pareto import mark_pareto_frontier
+from lambdaopt.aws.cloudwatch_client import CloudWatchClient, LambdaCloudWatchMetrics, parse_window
+from lambdaopt.aws.lambda_client import LambdaClient
+from lambdaopt.aws.logs_client import LogsClient
+from lambdaopt.benchmark.candidate_runner import (
+    SEPARATE_TEST_FUNCTIONS_SAFETY_NOTE,
+    load_candidate_function_mappings,
+    run_candidate_function_benchmarks,
+)
+from lambdaopt.benchmark.plan import BenchmarkPlan, create_benchmark_plan
+from lambdaopt.benchmark.result_collector import CLIENT_OBSERVED_DURATION_WARNING
+from lambdaopt.benchmark.runner import CURRENT_CONFIG_ONLY_WARNING, run_current_config_benchmark
+from lambdaopt.config import LambdaOptConfig, get_version, load_benchmark_results, load_config
+from lambdaopt.exceptions import LambdaOptError, LambdaOptSafetyError
+from lambdaopt.logging_config import configure_logging
+from lambdaopt.models import AnalyzedConfig, BenchmarkResult, Recommendation
+from lambdaopt.recommend.controller import ControllerInput, evaluate_controller
+from lambdaopt.recommend.slo_recommender import recommend_cheapest_slo_config
+from lambdaopt.report.charts import write_cost_vs_p95_chart
+from lambdaopt.report.cloudwatch_markdown import write_cloudwatch_analysis_report
+from lambdaopt.report.json_output import (
+    write_benchmark_results_json,
+    write_recommendation_json,
+)
+from lambdaopt.report.markdown import write_markdown_report
+from lambdaopt.simulator.generator import DEFAULT_SAMPLE_COUNT, DEFAULT_SEED
+from lambdaopt.simulator.replay import replay_workload
+from lambdaopt.simulator.workloads import WorkloadName
+
+DEFAULT_MONTHLY_PROVISIONED_CONCURRENCY_HOURS = 730.0
+
+app = typer.Typer(
+    name="lambdaopt",
+    help="SLO-aware AWS Lambda deployment optimizer.",
+    no_args_is_help=True,
+)
+
+lambda_client_factory = LambdaClient.from_session_options
+cloudwatch_client_factory = CloudWatchClient.from_session_options
+logs_client_factory = LogsClient.from_session_options
+current_config_benchmark_runner = run_current_config_benchmark
+candidate_function_benchmark_runner = run_candidate_function_benchmarks
+cli_config = LambdaOptConfig()
+debug_mode = False
+
+
+@app.callback()
+def main(
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Path to lambdaopt.yaml.",
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", help="Enable verbose logging."),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option("--quiet", help="Only show warnings and errors in logs."),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", help="Show traceback details for LambdaOpt errors."),
+    ] = False,
+) -> None:
+    """SLO-aware AWS Lambda deployment optimizer."""
+    global cli_config, debug_mode
+
+    debug_mode = debug
+    configure_logging(verbose=verbose, quiet=quiet)
+    try:
+        cli_config = load_config(config_path)
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+
+@app.command()
+def version(
+    plain: Annotated[
+        bool,
+        typer.Option("--plain", help="Print only the version number."),
+    ] = False,
+) -> None:
+    """Print the LambdaOpt version."""
+    current_version = get_version()
+    if plain:
+        typer.echo(current_version)
+        return
+
+    typer.echo(f"LambdaOpt {current_version}")
+
+
+def _handle_cli_error(exc: LambdaOptError) -> NoReturn:
+    if debug_mode:
+        traceback_text = traceback.format_exc()
+        if traceback_text.strip() != "NoneType: None":
+            typer.echo(traceback_text, err=True)
+
+    typer.echo(f"Error: {exc}", err=True)
+    raise typer.Exit(1)
+
+
+def _resolve_region(region: str | None) -> str | None:
+    return region or cli_config.default_region
+
+
+def _resolve_profile(profile: str | None) -> str | None:
+    return profile or cli_config.default_profile
+
+
+@app.command()
+def tune(
+    p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
+    monthly_requests: Annotated[
+        int,
+        typer.Option("--monthly-requests", min=0, help="Monthly request count."),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output", help="Directory where reports will be written."),
+    ],
+    input_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--input",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="JSON benchmark results file.",
+        ),
+    ] = None,
+    candidates_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--candidates",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="JSON mapping of candidate configs to separate test Lambda functions.",
+        ),
+    ] = None,
+    trials: Annotated[
+        int,
+        typer.Option("--trials", min=1, help="Measured invocations per candidate function."),
+    ] = 30,
+    warmup: Annotated[
+        int,
+        typer.Option("--warmup", min=0, help="Warmup invocations before measured trials."),
+    ] = 0,
+    delay_ms: Annotated[
+        int,
+        typer.Option("--delay-ms", min=0, help="Delay between invocations in milliseconds."),
+    ] = 0,
+    payload: Annotated[
+        Path,
+        typer.Option(
+            "--payload",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="JSON payload file for candidate function invocations.",
+        ),
+    ] = Path("examples/payload.json"),
+    region: Annotated[str | None, typer.Option("--region", help="AWS region.")] = None,
+    profile: Annotated[str | None, typer.Option("--profile", help="AWS profile name.")] = None,
+    output_format: Annotated[
+        Literal["markdown", "json", "both"],
+        typer.Option("--format", help="Output format to write."),
+    ] = "both",
+) -> None:
+    """Run a local SLO-aware optimization workflow from benchmark results."""
+    try:
+        benchmark_results, extra_warnings = _load_tune_benchmark_results(
+            input_path=input_path,
+            candidates_path=candidates_path,
+            trials=trials,
+            warmup=warmup,
+            delay_ms=delay_ms,
+            payload=payload,
+            region=_resolve_region(region),
+            profile=_resolve_profile(profile),
+        )
+        recommendation = _run_local_optimization_workflow(
+            benchmark_results=benchmark_results,
+            target_p95_ms=p95,
+            monthly_requests=monthly_requests,
+            output_dir=output_dir,
+            output_format=output_format,
+            extra_warnings=extra_warnings,
+        )
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+    if candidates_path is not None:
+        typer.echo("Benchmarked separate candidate test functions; no production config mutated.")
+    _print_summary(recommendation, p95, output_dir)
+
+
+@app.command()
+def simulate(
+    workload: Annotated[
+        WorkloadName,
+        typer.Option("--workload", help="Synthetic workload profile to simulate."),
+    ],
+    p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
+    monthly_requests: Annotated[
+        int,
+        typer.Option("--monthly-requests", min=0, help="Monthly request count."),
+    ],
+    samples: Annotated[
+        int,
+        typer.Option("--samples", min=1, help="Latency samples to generate per configuration."),
+    ] = DEFAULT_SAMPLE_COUNT,
+    seed: Annotated[
+        int,
+        typer.Option("--seed", help="Deterministic simulator seed."),
+    ] = DEFAULT_SEED,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output", help="Directory where reports will be written."),
+    ] = Path("reports/simulated"),
+) -> None:
+    """Generate synthetic benchmarks and run the local optimizer."""
+    try:
+        benchmark_results, simulator_warnings = replay_workload(
+            workload=workload,
+            samples=samples,
+            seed=seed,
+        )
+        recommendation = _run_local_optimization_workflow(
+            benchmark_results=benchmark_results,
+            target_p95_ms=p95,
+            monthly_requests=monthly_requests,
+            output_dir=output_dir,
+            output_format="both",
+            extra_warnings=simulator_warnings,
+        )
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+    typer.echo(f"Simulated workload: {workload} ({samples} samples/config, seed {seed})")
+    _print_summary(recommendation, p95, output_dir)
+
+
+@app.command()
+def plan(
+    function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
+    p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
+    region: Annotated[str | None, typer.Option("--region", help="AWS region.")] = None,
+    profile: Annotated[str | None, typer.Option("--profile", help="AWS profile name.")] = None,
+) -> None:
+    """Create a read-only benchmark plan from live Lambda metadata."""
+    try:
+        effective_region = _resolve_region(region)
+        effective_profile = _resolve_profile(profile)
+        client = lambda_client_factory(profile=effective_profile, region=effective_region)
+        function_configuration = client.get_function_configuration(function_name)
+        benchmark_plan = create_benchmark_plan(
+            function_name=function_name,
+            current_config=function_configuration.config,
+        )
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+    _print_benchmark_plan(
+        benchmark_plan,
+        target_p95_ms=p95,
+        region=effective_region,
+        profile=effective_profile,
+        runtime=function_configuration.metadata.get("runtime"),
+    )
+
+
+@app.command()
+def bench(
+    function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
+    trials: Annotated[int, typer.Option("--trials", min=1, help="Measured invocations.")] = 50,
+    warmup: Annotated[
+        int,
+        typer.Option("--warmup", min=0, help="Warmup invocations before measured trials."),
+    ] = 0,
+    delay_ms: Annotated[
+        int,
+        typer.Option("--delay-ms", min=0, help="Delay between invocations in milliseconds."),
+    ] = 0,
+    payload: Annotated[
+        Path,
+        typer.Option(
+            "--payload",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="JSON payload file for synchronous invocation.",
+        ),
+    ] = Path("examples/payload.json"),
+    region: Annotated[str | None, typer.Option("--region", help="AWS region.")] = None,
+    profile: Annotated[str | None, typer.Option("--profile", help="AWS profile name.")] = None,
+    p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")] = 500,
+    monthly_requests: Annotated[
+        int,
+        typer.Option("--monthly-requests", min=0, help="Monthly request count."),
+    ] = 1_000_000,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output", help="Directory where reports will be written."),
+    ] = Path("reports/bench-current"),
+) -> None:
+    """Benchmark the currently deployed Lambda configuration without changing it."""
+    try:
+        effective_region = _resolve_region(region)
+        effective_profile = _resolve_profile(profile)
+        client = lambda_client_factory(profile=effective_profile, region=effective_region)
+        function_configuration = client.get_function_configuration(function_name)
+        benchmark_result = current_config_benchmark_runner(
+            client=client._client,
+            function_name=function_name,
+            config=function_configuration.config,
+            payload_path=payload,
+            trials=trials,
+            warmup=warmup,
+            delay_ms=delay_ms,
+            runtime=_metadata_string(function_configuration.metadata.get("runtime")),
+            region=effective_region,
+        )
+        recommendation = _run_local_optimization_workflow(
+            benchmark_results=[benchmark_result],
+            target_p95_ms=p95,
+            monthly_requests=monthly_requests,
+            output_dir=output_dir,
+            output_format="both",
+            extra_warnings=[
+                CURRENT_CONFIG_ONLY_WARNING,
+                CLIENT_OBSERVED_DURATION_WARNING,
+                "No production Lambda configuration was changed.",
+            ],
+        )
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+    typer.echo(
+        "Benchmarked current deployed config only; no memory or architecture comparison "
+        "was performed."
+    )
+    _print_summary(recommendation, p95, output_dir)
+
+
+@app.command()
+def analyze(
+    function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
+    window: Annotated[
+        str,
+        typer.Option("--window", help="Observation window: 1h, 6h, 24h, or 7d."),
+    ] = "24h",
+    p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")] = 500,
+    region: Annotated[str | None, typer.Option("--region", help="AWS region.")] = None,
+    profile: Annotated[str | None, typer.Option("--profile", help="AWS profile name.")] = None,
+    monthly_requests: Annotated[
+        int,
+        typer.Option("--monthly-requests", min=0, help="Monthly request count."),
+    ] = 1_000_000,
+    include_logs: Annotated[
+        bool,
+        typer.Option("--include-logs", help="Analyze Lambda REPORT logs for cold starts."),
+    ] = False,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output", help="Directory where reports will be written."),
+    ] = Path("reports/analyze"),
+) -> None:
+    """Analyze production Lambda CloudWatch metrics without changing anything."""
+    try:
+        start_time, end_time, period_seconds = parse_window(window)
+        effective_region = _resolve_region(region)
+        effective_profile = _resolve_profile(profile)
+        lambda_client = lambda_client_factory(profile=effective_profile, region=effective_region)
+        cloudwatch_client = cloudwatch_client_factory(
+            profile=effective_profile,
+            region=effective_region,
+        )
+        function_configuration = lambda_client.get_function_configuration(function_name)
+        metrics = cloudwatch_client.fetch_lambda_metrics(
+            function_name=function_name,
+            start_time=start_time,
+            end_time=end_time,
+            period_seconds=period_seconds,
+        )
+        cold_start_analysis = None
+        log_warnings: list[str] = []
+        if include_logs:
+            try:
+                logs_client = logs_client_factory(
+                    profile=effective_profile,
+                    region=effective_region,
+                )
+                report_logs = logs_client.fetch_lambda_report_logs(
+                    function_name=function_name,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+                cold_start_analysis = analyze_cold_starts_from_messages(
+                    [log.message for log in report_logs],
+                    observed_p95_ms=_latest_metric_value(metrics, "duration_p95"),
+                    observed_p99_ms=_latest_metric_value(metrics, "duration_p99"),
+                )
+            except LambdaOptError as exc:
+                log_warnings.append(
+                    f"CloudWatch Logs cold-start analysis was skipped: {exc}"
+                )
+        analysis = analyze_cloudwatch_metrics(
+            metrics=metrics,
+            current_config=function_configuration.config,
+            target_p95_ms=p95,
+            monthly_requests=monthly_requests,
+            window_label=window,
+            cold_start_analysis=cold_start_analysis,
+        )
+        if log_warnings:
+            analysis = analysis.model_copy(
+                update={"warnings": [*analysis.warnings, *log_warnings]}
+            )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        write_cloudwatch_analysis_report(
+            analysis=analysis,
+            current_config=function_configuration.config,
+            target_p95_ms=p95,
+            monthly_requests=monthly_requests,
+            output_dir=output_dir,
+        )
+        (output_dir / "cloudwatch_analysis.json").write_text(
+            json.dumps(analysis.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+    typer.echo(f"Analyzed CloudWatch metrics for {function_name} over {window}.")
+    typer.echo(f"SLO health: {_cloudwatch_slo_status(analysis.slo_passed)}")
+    typer.echo(f"Reports written to {output_dir}")
+
+
+@app.command()
+def watch(
+    function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
+    p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
+    window: Annotated[
+        str,
+        typer.Option("--window", help="Observation window: 1h, 6h, 24h, or 7d."),
+    ] = "15m",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Only recommend actions; never mutate infrastructure."),
+    ] = True,
+    once: Annotated[bool, typer.Option("--once", help="Run one evaluation and exit.")] = True,
+    loop: Annotated[bool, typer.Option("--loop", help="Reserved for future daemon mode.")] = False,
+    region: Annotated[str | None, typer.Option("--region", help="AWS region.")] = None,
+    profile: Annotated[str | None, typer.Option("--profile", help="AWS profile name.")] = None,
+) -> None:
+    """Run one dry-run adaptive watch evaluation."""
+    if loop or not once:
+        _handle_cli_error(LambdaOptSafetyError("Loop mode is not implemented yet. Use --once."))
+    if not dry_run:
+        _handle_cli_error(
+            LambdaOptSafetyError(
+                "Only --dry-run mode is supported; no production mutation is allowed."
+            )
+        )
+
+    try:
+        start_time, end_time, period_seconds = parse_window(window)
+        effective_region = _resolve_region(region)
+        effective_profile = _resolve_profile(profile)
+        lambda_client = lambda_client_factory(profile=effective_profile, region=effective_region)
+        cloudwatch_client = cloudwatch_client_factory(
+            profile=effective_profile,
+            region=effective_region,
+        )
+        function_configuration = lambda_client.get_function_configuration(function_name)
+        metrics = cloudwatch_client.fetch_lambda_metrics(
+            function_name=function_name,
+            start_time=start_time,
+            end_time=end_time,
+            period_seconds=period_seconds,
+        )
+        analysis = analyze_cloudwatch_metrics(
+            metrics=metrics,
+            current_config=function_configuration.config,
+            target_p95_ms=p95,
+            monthly_requests=0,
+            window_label=window,
+        )
+        decision = evaluate_controller(
+            ControllerInput(
+                current_config=function_configuration.config,
+                observed_p95_ms=analysis.observed_p95_ms,
+                observed_p99_ms=analysis.observed_p99_ms,
+                target_p95_ms=p95,
+                cold_start_rate=0.0,
+                error_rate=analysis.error_rate,
+                throttle_rate=analysis.throttle_rate,
+                current_estimated_cost=analysis.cost_estimate,
+            )
+        )
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+    typer.echo(f"Watch dry-run evaluation for {function_name} over {window}")
+    typer.echo(f"Action: {decision.action}")
+    typer.echo(f"Reasoning: {decision.reasoning}")
+    typer.echo("No production infrastructure was mutated.")
+
+
+def _print_benchmark_plan(
+    plan: BenchmarkPlan,
+    *,
+    target_p95_ms: float,
+    region: str | None,
+    profile: str | None,
+    runtime: object,
+) -> None:
+    current = plan.current_config
+    typer.echo(f"Benchmark plan for {plan.function_name}")
+    typer.echo(f"Target p95: {target_p95_ms:g} ms")
+    typer.echo(f"Region: {region or 'boto3 default'}")
+    typer.echo(f"Profile: {profile or 'boto3 default'}")
+    typer.echo(
+        "Current config: "
+        f"{current.memory_mb}MB {current.architecture}, "
+        f"timeout {current.timeout_seconds}s, "
+        f"provisioned concurrency {current.provisioned_concurrency}"
+    )
+    if runtime:
+        typer.echo(f"Runtime: {runtime}")
+
+    typer.echo("Candidate configs:")
+    for candidate in plan.candidate_configs:
+        typer.echo(
+            "  - "
+            f"{candidate.memory_mb}MB {candidate.architecture}, "
+            f"timeout {candidate.timeout_seconds}s, "
+            f"provisioned concurrency {candidate.provisioned_concurrency}"
+        )
+
+    typer.echo("Safety notes:")
+    for note in plan.safety_notes:
+        typer.echo(f"  - {note}")
+    typer.echo(
+        "Suggested next command: "
+        f"lambdaopt simulate --workload cpu-bound --p95 {target_p95_ms:g} "
+        "--monthly-requests 1000000 --output reports/plan-preview"
+    )
+
+
+def _metadata_string(value: object) -> str | None:
+    return str(value) if value is not None else None
+
+
+def _cloudwatch_slo_status(slo_passed: bool | None) -> str:
+    if slo_passed is True:
+        return "healthy"
+    if slo_passed is False:
+        return "risky"
+    return "unknown"
+
+
+def _latest_metric_value(metrics: LambdaCloudWatchMetrics, metric_id: str) -> float | None:
+    series = metrics.series.get(metric_id)
+    if series is None or not series.points:
+        return None
+    return series.points[-1].value
+
+
+def _load_tune_benchmark_results(
+    *,
+    input_path: Path | None,
+    candidates_path: Path | None,
+    trials: int,
+    warmup: int,
+    delay_ms: int,
+    payload: Path,
+    region: str | None,
+    profile: str | None,
+) -> tuple[list[BenchmarkResult], list[str]]:
+    if input_path is not None and candidates_path is not None:
+        raise LambdaOptError("Use either --input or --candidates, not both.")
+
+    if input_path is None and candidates_path is None:
+        raise LambdaOptError("Provide either --input benchmark results or --candidates mapping.")
+
+    if input_path is not None:
+        return load_benchmark_results(input_path), []
+
+    if candidates_path is None:
+        raise LambdaOptError("Candidate mapping path was not provided.")
+
+    client = lambda_client_factory(profile=profile, region=region)
+    mappings = load_candidate_function_mappings(candidates_path)
+    return (
+        candidate_function_benchmark_runner(
+            client=client._client,
+            mappings=mappings,
+            payload_path=payload,
+            trials=trials,
+            warmup=warmup,
+            delay_ms=delay_ms,
+            region=region,
+        ),
+        [
+            SEPARATE_TEST_FUNCTIONS_SAFETY_NOTE,
+            CLIENT_OBSERVED_DURATION_WARNING,
+            "No production Lambda memory or architecture configuration was changed.",
+        ],
+    )
+
+
+def _run_local_optimization_workflow(
+    *,
+    benchmark_results: list[BenchmarkResult],
+    target_p95_ms: float,
+    monthly_requests: int,
+    output_dir: Path,
+    output_format: Literal["markdown", "json", "both"],
+    extra_warnings: list[str] | None = None,
+) -> Recommendation:
+    analyzed_configs = _analyze_benchmark_results(
+        benchmark_results=benchmark_results,
+        target_p95_ms=target_p95_ms,
+        monthly_requests=monthly_requests,
+    )
+    analyzed_configs = mark_pareto_frontier(analyzed_configs)
+    recommendation = recommend_cheapest_slo_config(analyzed_configs, target_p95_ms=target_p95_ms)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    chart_warning = write_cost_vs_p95_chart(analyzed_configs, output_dir)
+    report_warnings = [*(extra_warnings or [])]
+    if chart_warning:
+        report_warnings.append(chart_warning)
+
+    if output_format in {"json", "both"}:
+        write_benchmark_results_json(analyzed_configs, output_dir)
+        write_recommendation_json(recommendation, output_dir)
+
+    if output_format in {"markdown", "both"}:
+        write_markdown_report(
+            analyzed_configs=analyzed_configs,
+            recommendation=recommendation,
+            target_p95_ms=target_p95_ms,
+            monthly_requests=monthly_requests,
+            output_dir=output_dir,
+            warnings=report_warnings,
+        )
+
+    for warning in report_warnings:
+        typer.echo(f"Warning: {warning}", err=True)
+
+    return recommendation
+
+
+def _print_summary(
+    recommendation: Recommendation,
+    target_p95_ms: float,
+    output_dir: Path,
+) -> None:
+    typer.echo(
+        "Recommendation: "
+        f"{recommendation.recommended_config.memory_mb}MB "
+        f"{recommendation.recommended_config.architecture} "
+        f"for p95 <= {target_p95_ms:g}ms "
+        f"({recommendation.confidence:.0%} confidence)."
+    )
+    typer.echo(f"Reports written to {output_dir}")
+
+
+def _analyze_benchmark_results(
+    *,
+    benchmark_results: list[BenchmarkResult],
+    target_p95_ms: float,
+    monthly_requests: int,
+) -> list[AnalyzedConfig]:
+    analyzed_configs: list[AnalyzedConfig] = []
+    for result in benchmark_results:
+        latency = calculate_latency_stats(result.raw_latencies_ms, target_ms=target_p95_ms)
+        cost = estimate_lambda_cost(
+            memory_mb=result.config.memory_mb,
+            avg_duration_ms=latency.mean_ms,
+            monthly_requests=monthly_requests,
+            architecture=result.config.architecture,
+            provisioned_concurrency=result.config.provisioned_concurrency,
+            provisioned_concurrency_hours=(
+                DEFAULT_MONTHLY_PROVISIONED_CONCURRENCY_HOURS
+                if result.config.provisioned_concurrency > 0
+                else 0
+            ),
+            request_cost_per_million_usd=cli_config.cost_rates.request_cost_per_million_usd,
+            x86_compute_cost_per_gb_second_usd=(
+                cli_config.cost_rates.x86_compute_cost_per_gb_second_usd
+            ),
+            arm64_compute_cost_per_gb_second_usd=(
+                cli_config.cost_rates.arm64_compute_cost_per_gb_second_usd
+            ),
+            provisioned_concurrency_cost_per_gb_second_usd=(
+                cli_config.cost_rates.provisioned_concurrency_cost_per_gb_second_usd
+            ),
+            provisioned_concurrency_execution_cost_per_gb_second_usd=(
+                cli_config.cost_rates.provisioned_concurrency_execution_cost_per_gb_second_usd
+            ),
+        )
+        analyzed_configs.append(
+            AnalyzedConfig(
+                config=result.config,
+                latency=latency,
+                cost=cost,
+                cold_start_rate=result.cold_starts / latency.sample_count,
+                slo_passed=latency.p95_ms <= target_p95_ms,
+                errors=result.errors,
+            )
+        )
+
+    return analyzed_configs
+
+
+if __name__ == "__main__":
+    app()

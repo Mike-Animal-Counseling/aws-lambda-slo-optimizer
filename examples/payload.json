@@ -1,0 +1,7 @@
+{
+  "source": "lambdaopt-local-benchmark",
+  "request_id": "sample",
+  "body": {
+    "message": "Synthetic benchmark payload"
+  }
+}
