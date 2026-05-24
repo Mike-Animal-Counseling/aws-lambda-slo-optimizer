@@ -1,6 +1,6 @@
 # Release Checklist
 
-This checklist is for preparing LambdaOpt `v0.1.0` production beta releases.
+This checklist is for preparing LambdaOpt production beta releases.
 
 ## Pre-Release Checks
 
@@ -45,21 +45,21 @@ lambdaopt version --plain
 Expected output:
 
 ```text
-0.1.0
+0.2.0
 ```
 
-## Tagging v0.1.0
+## Tagging
 
 Create the release tag after local checks and GitHub CI pass:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## GitHub Release
 
-Draft a GitHub release for `v0.1.0` and include:
+Draft a GitHub release for the pushed tag and include:
 
 - release summary,
 - safety defaults,

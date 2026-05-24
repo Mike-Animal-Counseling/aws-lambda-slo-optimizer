@@ -13,7 +13,7 @@ LambdaOpt is a production-oriented CLI for evaluating AWS Lambda performance, co
 
 ## Current Release
 
-Current release: `v0.1.0 beta`.
+Current release: `v0.2.0 beta`.
 
 This beta is intended for local evaluation, report generation, read-only AWS analysis, current-config benchmarking, and non-production smoke testing. It is not an automatic production mutation system.
 
@@ -242,7 +242,7 @@ The PyPI publishing workflow uses Trusted Publishing and does not store PyPI API
 
 ## Status
 
-LambdaOpt is a `v0.1.0` production beta. The local optimizer, simulator, report generation, read-only AWS metadata planning, current-config benchmarking, separate test-function candidate benchmarking, CloudWatch analysis, cold-start analysis, provisioned concurrency recommendation, architecture comparison, and dry-run controller are implemented and tested. Production mutation remains intentionally out of scope.
+LambdaOpt is a `v0.2.0` production beta. The local optimizer, simulator, report generation, SLO risk scoring, read-only AWS metadata planning, current-config benchmarking, separate test-function candidate benchmarking, CloudWatch analysis, cold-start analysis, provisioned concurrency recommendation, architecture comparison, and dry-run controller are implemented and tested. Production mutation remains intentionally out of scope.
 
 ## Roadmap
 

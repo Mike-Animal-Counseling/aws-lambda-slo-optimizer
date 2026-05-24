@@ -6,7 +6,7 @@ from lambdaopt.models import LambdaCandidateConfig, LatencyPercentile, LatencySL
 
 
 def test_package_imports() -> None:
-    assert lambdaopt.__version__ == "0.1.0"
+    assert lambdaopt.__version__ == "0.2.0"
 
 
 def test_models_validate_basic_values() -> None:

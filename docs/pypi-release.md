@@ -37,8 +37,8 @@ python -m build
 3. Create and push the tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 Alternatively, publish a GitHub Release for the tag. The publish workflow runs on both `v*` tag pushes and published GitHub releases.
@@ -57,7 +57,7 @@ lambdaopt version --plain
 Expected output:
 
 ```text
-0.1.0
+0.2.0
 ```
 
 On Windows PowerShell:

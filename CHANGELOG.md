@@ -6,6 +6,11 @@ This project follows semantic versioning for public releases.
 
 ## Unreleased
 
+## v0.2.0 - Production Risk Scoring Beta
+
+This release upgrades LambdaOpt's local optimizer from p95/cost-only recommendation toward
+production-oriented SLO risk assessment.
+
 ### Added
 
 - Production-oriented SLO risk scoring for benchmarked configs using p95, p99, errors, cold-start rate, and sample confidence.
