@@ -24,3 +24,16 @@ def test_version_command() -> None:
 
     assert result.exit_code == 0
     assert result.stdout.strip() == lambdaopt.__version__
+
+
+def test_quickstart_command_shows_safe_first_steps() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["quickstart", "my-fn", "--p95", "500", "--region", "us-east-1"])
+
+    assert result.exit_code == 0
+    assert "lambdaopt doctor" in result.stdout
+    assert "lambdaopt simulate" in result.stdout
+    assert "lambdaopt tune --input" in result.stdout
+    assert "lambdaopt plan my-fn --p95 500 --region us-east-1" in result.stdout
+    assert "does not mutate production" in result.stdout

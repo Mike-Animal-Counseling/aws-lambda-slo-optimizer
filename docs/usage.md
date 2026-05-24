@@ -8,6 +8,17 @@ LambdaOpt is a CLI for SLO-aware Lambda optimization. It can run fully local sim
 lambdaopt version
 ```
 
+## Quickstart
+
+If you are not sure where to start, run:
+
+```bash
+lambdaopt quickstart
+```
+
+This prints the shortest safe path for local-only use first, then AWS commands for a sandbox or
+non-production Lambda. It does not call AWS and does not mutate anything.
+
 ## Simulate
 
 Use simulation when you want to demonstrate the optimizer without AWS credentials:

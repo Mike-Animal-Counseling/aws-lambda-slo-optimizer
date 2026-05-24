@@ -128,6 +128,55 @@ def version(
     typer.echo(f"LambdaOpt {current_version}")
 
 
+@app.command()
+def quickstart(
+    function_name: Annotated[
+        str | None,
+        typer.Argument(help="Optional Lambda function name for AWS next-step examples."),
+    ] = None,
+    p95: Annotated[
+        float,
+        typer.Option("--p95", min=0.0, help="Example p95 latency target in ms."),
+    ] = 500,
+    region: Annotated[
+        str,
+        typer.Option("--region", help="Example AWS region for AWS commands."),
+    ] = "us-east-1",
+) -> None:
+    """Print the shortest safe path from first run to a LambdaOpt report."""
+    name = function_name or "my-function"
+    typer.echo("LambdaOpt Quickstart")
+    typer.echo("")
+    typer.echo("Start here without AWS credentials:")
+    typer.echo("  lambdaopt doctor")
+    typer.echo(
+        "  lambdaopt simulate --workload cpu-bound "
+        f"--p95 {p95:g} --monthly-requests 1000000 --output reports/cpu"
+    )
+    typer.echo(
+        "  lambdaopt tune --input examples/sample_results.json "
+        f"--p95 {p95:g} --monthly-requests 1000000 --output reports/sample"
+    )
+    typer.echo("")
+    typer.echo("When you have a sandbox or non-production Lambda:")
+    typer.echo(f"  lambdaopt doctor {name} --region {region}")
+    typer.echo(
+        "  lambdaopt iam generate --mode analyze-with-logs "
+        f"--function {name} --region {region} --account-id ACCOUNT_ID"
+    )
+    typer.echo(f"  lambdaopt plan {name} --p95 {p95:g} --region {region}")
+    typer.echo(
+        f"  lambdaopt analyze {name} --window 24h --p95 {p95:g} "
+        f"--region {region} --output reports/analyze"
+    )
+    typer.echo("")
+    typer.echo("Reports to open:")
+    typer.echo("  reports/cpu/optimization_report.md")
+    typer.echo("  reports/sample/optimization_report.md")
+    typer.echo("")
+    typer.echo("Safety: LambdaOpt does not mutate production Lambda configuration by default.")
+
+
 @iam_app.command("generate")
 def iam_generate(
     mode: Annotated[

@@ -63,6 +63,20 @@ source .venv/bin/activate
 python -m pip install -e ".[dev,aws,charts]"
 ```
 
+Ask LambdaOpt what to run first:
+
+```bash
+lambdaopt quickstart
+```
+
+With no AWS account yet, start with local checks and simulation:
+
+```bash
+lambdaopt doctor
+lambdaopt simulate --workload cpu-bound --p95 500 --monthly-requests 1000000 --output reports/cpu
+lambdaopt tune --input examples/sample_results.json --p95 500 --monthly-requests 1000000 --output reports/sample
+```
+
 Run a synthetic workload with no AWS credentials:
 
 ```bash
