@@ -223,7 +223,7 @@ python -m pytest
 python -m build
 ```
 
-`make check` runs formatting checks, linting, type checking, tests, and package build. Pytest is configured to keep temporary files under `.pytest-tmp-root` so local runs do not depend on the operating system temp directory.
+`make check` runs formatting checks, linting, type checking, tests, and package build. Pytest is configured to keep temporary files under per-run directories in `.pytest-tmp-root` and disables pytest cache writes, so local runs do not depend on the operating system temp directory.
 
 ## CI Expectations
 
