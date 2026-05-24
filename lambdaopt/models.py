@@ -88,6 +88,7 @@ class AnalyzedConfig(BaseModel):
     slo_passed: bool
     errors: int = Field(default=0, ge=0)
     dominated: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Recommendation(BaseModel):

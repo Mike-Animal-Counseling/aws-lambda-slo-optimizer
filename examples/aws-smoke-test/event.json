@@ -1,0 +1,4 @@
+{
+  "workload": "lambdaopt-smoke-test",
+  "repeat": 2500
+}

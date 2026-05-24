@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Minimal non-production Lambda for LambdaOpt smoke tests.
+
+Resources:
+  LambdaOptSmokeTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: lambdaopt-smoke-test
+      Runtime: python3.11
+      Handler: handler.handler
+      CodeUri: .
+      MemorySize: 512
+      Timeout: 30
+      Architectures:
+        - x86_64
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+Outputs:
+  FunctionName:
+    Description: Smoke test Lambda function name.
+    Value:
+      Ref: LambdaOptSmokeTestFunction
+  FunctionArn:
+    Description: Smoke test Lambda function ARN.
+    Value:
+      Fn::GetAtt:
+        - LambdaOptSmokeTestFunction
+        - Arn

@@ -36,7 +36,8 @@ def create_benchmark_plan(
     candidates = candidate_configs or generate_candidate_configs(current_config=current_config)
     notes = safety_notes or [
         NO_MUTATION_SAFETY_NOTE,
-        "Suggested next command: lambdaopt benchmark is planned for a future release.",
+        "Use lambdaopt tune --candidates with non-production aliases or separate test functions "
+        "to benchmark multiple candidate configurations safely.",
     ]
 
     return BenchmarkPlan(

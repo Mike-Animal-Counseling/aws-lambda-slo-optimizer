@@ -21,7 +21,6 @@ def create_aws_session(
     except BotoCoreError as exc:
         raise AwsIntegrationError(f"Could not create AWS session: {exc}") from exc
 
-    _validate_session_credentials(session)
     return session
 
 
@@ -74,19 +73,3 @@ def create_logs_boto_client(
         ) from exc
     except BotoCoreError as exc:
         raise AwsIntegrationError(f"Could not create CloudWatch Logs client: {exc}") from exc
-
-
-def _validate_session_credentials(session: boto3.session.Session) -> None:
-    try:
-        credentials = session.get_credentials()
-    except NoCredentialsError as exc:
-        raise AwsCredentialsError(
-            "AWS credentials were not found. Configure credentials or pass --profile."
-        ) from exc
-    except BotoCoreError as exc:
-        raise AwsIntegrationError(f"Could not inspect AWS credentials: {exc}") from exc
-
-    if credentials is None:
-        raise AwsCredentialsError(
-            "AWS credentials were not found. Configure credentials or pass --profile."
-        )

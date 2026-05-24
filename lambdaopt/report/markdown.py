@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from lambdaopt.models import AnalyzedConfig, Recommendation
+from lambdaopt.security import redact_text
 
 MARKDOWN_REPORT_FILENAME = "optimization_report.md"
 
@@ -18,16 +19,14 @@ def write_markdown_report(
 ) -> Path:
     """Write a human-readable optimization report."""
     path = output_dir / MARKDOWN_REPORT_FILENAME
-    path.write_text(
-        render_markdown_report(
-            analyzed_configs=analyzed_configs,
-            recommendation=recommendation,
-            target_p95_ms=target_p95_ms,
-            monthly_requests=monthly_requests,
-            warnings=warnings or [],
-        ),
-        encoding="utf-8",
+    rendered = render_markdown_report(
+        analyzed_configs=analyzed_configs,
+        recommendation=recommendation,
+        target_p95_ms=target_p95_ms,
+        monthly_requests=monthly_requests,
+        warnings=warnings or [],
     )
+    path.write_text(redact_text(rendered), encoding="utf-8")
     return path
 
 
@@ -86,11 +85,15 @@ def render_markdown_report(
 
 def _benchmark_table(analyzed_configs: list[AnalyzedConfig]) -> str:
     header = (
-        "| Memory | Arch | p50 | p95 | p99 | Cold start rate | Monthly cost | SLO | Pareto |\n"
-        "|---:|---|---:|---:|---:|---:|---:|---|---|"
+        "| Candidate | Function ref | Source | Memory | Arch | p50 | p95 | p99 | "
+        "Cold start rate | Monthly cost | SLO | Pareto |\n"
+        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---|---|"
     )
     rows = [
         (
+            f"| {_candidate_name(config)} "
+            f"| {_candidate_function_ref(config)} "
+            f"| {_candidate_source(config)} "
             f"| {config.config.memory_mb} MB "
             f"| {config.config.architecture} "
             f"| {config.latency.p50_ms:.1f} ms "
@@ -107,6 +110,23 @@ def _benchmark_table(analyzed_configs: list[AnalyzedConfig]) -> str:
         )
     ]
     return "\n".join([header, *rows])
+
+
+def _candidate_name(config: AnalyzedConfig) -> str:
+    return str(config.metadata.get("candidate_name", "-"))
+
+
+def _candidate_function_ref(config: AnalyzedConfig) -> str:
+    return str(
+        config.metadata.get(
+            "candidate_function_ref",
+            config.metadata.get("candidate_function_name", "-"),
+        )
+    )
+
+
+def _candidate_source(config: AnalyzedConfig) -> str:
+    return str(config.metadata.get("candidate_source", "-"))
 
 
 def _rejected_reasons(recommendation: Recommendation) -> str:

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from lambdaopt.analysis.cloudwatch_analysis import CloudWatchAnalysis
 from lambdaopt.models import LambdaConfig
+from lambdaopt.security import redact_text
 
 CLOUDWATCH_REPORT_FILENAME = "optimization_report.md"
 
@@ -18,15 +19,13 @@ def write_cloudwatch_analysis_report(
 ) -> Path:
     """Write a CloudWatch analysis report to the output directory."""
     path = output_dir / CLOUDWATCH_REPORT_FILENAME
-    path.write_text(
-        render_cloudwatch_analysis_report(
-            analysis=analysis,
-            current_config=current_config,
-            target_p95_ms=target_p95_ms,
-            monthly_requests=monthly_requests,
-        ),
-        encoding="utf-8",
+    rendered = render_cloudwatch_analysis_report(
+        analysis=analysis,
+        current_config=current_config,
+        target_p95_ms=target_p95_ms,
+        monthly_requests=monthly_requests,
     )
+    path.write_text(redact_text(rendered), encoding="utf-8")
     return path
 
 

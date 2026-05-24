@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadLambdaFunctionMetadata",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration"
+      ],
+      "Resource": [
+        "arn:aws:lambda:REGION:ACCOUNT_ID:function:FUNCTION_NAME",
+        "arn:aws:lambda:REGION:ACCOUNT_ID:function:FUNCTION_NAME:*"
+      ]
+    },
+    {
+      "Sid": "InvokeApprovedBenchmarkFunctions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction"
+      ],
+      "Resource": [
+        "arn:aws:lambda:REGION:ACCOUNT_ID:function:FUNCTION_NAME",
+        "arn:aws:lambda:REGION:ACCOUNT_ID:function:FUNCTION_NAME:*"
+      ]
+    }
+  ]
+}

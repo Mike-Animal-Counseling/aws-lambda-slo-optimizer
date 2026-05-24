@@ -85,6 +85,70 @@ lambdaopt watch my-function --p95 500 --window 15m --dry-run --region us-east-1
 
 The watch controller only recommends test actions. It never outputs direct mutation actions.
 
+## Doctor
+
+Check local environment readiness without AWS:
+
+```bash
+lambdaopt doctor
+```
+
+Check AWS identity, Lambda metadata access, CloudWatch metrics access, and optional Logs access:
+
+```bash
+lambdaopt doctor my-function --region us-east-1 --profile dev
+lambdaopt doctor my-function --region us-east-1 --include-logs
+lambdaopt doctor my-function --region us-east-1 --json
+```
+
+`doctor` does not invoke Lambda and does not mutate AWS resources. It never prints AWS access keys, secret keys, session tokens, or raw environment variables.
+
+## Generate IAM Policies
+
+Generate least-privilege policy JSON for a LambdaOpt usage mode:
+
+```bash
+lambdaopt iam generate --mode plan --function my-function --region us-east-1 --account-id 123456789012
+lambdaopt iam generate --mode bench --function my-function --region us-east-1 --account-id 123456789012
+lambdaopt iam generate --mode analyze-with-logs --function my-function --region us-east-1 --account-id 123456789012 --output policy.json
+```
+
+If `--account-id` is omitted, LambdaOpt uses STS `GetCallerIdentity` through the standard boto3 provider chain to infer it:
+
+```bash
+lambdaopt iam generate --mode analyze --function my-function --region us-east-1 --profile dev
+```
+
+The generated policies do not include `AdministratorAccess` or Lambda mutation actions. See [IAM Permissions](iam-permissions.md) for the full matrix.
+
+## First Real AWS Run
+
+Start with a sandbox account or non-production Lambda function.
+
+Step 1: check readiness.
+
+```bash
+lambdaopt doctor my-function --region us-east-1
+```
+
+Step 2: generate least-privilege IAM policy JSON.
+
+```bash
+lambdaopt iam generate --mode analyze-with-logs --function my-function --region us-east-1 --account-id ACCOUNT_ID
+```
+
+Step 3: read Lambda metadata and print a safe benchmark plan.
+
+```bash
+lambdaopt plan my-function --p95 500 --region us-east-1
+```
+
+Step 4: analyze CloudWatch metrics without mutation.
+
+```bash
+lambdaopt analyze my-function --window 24h --p95 500
+```
+
 ## Configuration
 
 Global options:

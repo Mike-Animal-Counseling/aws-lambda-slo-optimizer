@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from lambdaopt.models import AnalyzedConfig, Recommendation
+from lambdaopt.security import redact_value
 
 BENCHMARK_RESULTS_FILENAME = "benchmark_results.json"
 RECOMMENDED_CONFIG_FILENAME = "recommended_config.json"
@@ -31,7 +32,7 @@ def write_recommendation_json(recommendation: Recommendation, output_dir: Path) 
 
 def _write_json(path: Path, payload: Any) -> None:
     path.write_text(
-        json.dumps(_to_jsonable(payload), indent=2, sort_keys=True) + "\n",
+        json.dumps(redact_value(_to_jsonable(payload)), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 

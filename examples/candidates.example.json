@@ -1,0 +1,36 @@
+{
+  "base_function_name": "my-function",
+  "notes": "All candidates point to non-production aliases or test functions.",
+  "candidates": [
+    {
+      "name": "512MB x86 test",
+      "function_ref": "my-function:test-512-x86",
+      "memory_mb": 512,
+      "architecture": "x86_64",
+      "provisioned_concurrency": 0,
+      "tags": {
+        "environment": "test",
+        "runtime": "python"
+      }
+    },
+    {
+      "name": "1024MB arm test",
+      "function_ref": "my-function:test-1024-arm",
+      "memory_mb": 1024,
+      "architecture": "arm64",
+      "provisioned_concurrency": 0,
+      "tags": {
+        "environment": "test",
+        "runtime": "python"
+      }
+    },
+    {
+      "name": "1536MB x86 separate function",
+      "function_ref": "my-function-1536-x86-test",
+      "memory_mb": 1536,
+      "architecture": "x86_64",
+      "provisioned_concurrency": 0,
+      "notes": "Separate non-production test function."
+    }
+  ]
+}

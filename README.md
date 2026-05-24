@@ -1,8 +1,21 @@
 # LambdaOpt: SLO-aware cost optimizer for AWS Lambda
 
+[![CI](https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<!-- PyPI badge can be enabled after the package is published:
+[![PyPI](https://img.shields.io/pypi/v/aws-lambda-slo-optimizer.svg)](https://pypi.org/project/aws-lambda-slo-optimizer/)
+-->
+
 Find the cheapest AWS Lambda configuration that meets your p95/p99 latency SLO.
 
 LambdaOpt is a production-oriented CLI for evaluating AWS Lambda performance, cost, and operational risk. It benchmarks candidate configurations, estimates Lambda cost, computes latency percentiles and SLO violation rate, analyzes CloudWatch production metrics, detects cold-start-driven tail latency from logs when available, and recommends safe next actions. It defaults to dry-run behavior and no production mutation.
+
+## Current Release
+
+Current release: `v0.1.0 beta`.
+
+This beta is intended for local evaluation, report generation, read-only AWS analysis, current-config benchmarking, and non-production smoke testing. It is not an automatic production mutation system.
 
 ## What LambdaOpt Does
 
@@ -33,7 +46,13 @@ The AWS layer is isolated from the optimizer. Benchmark data, CloudWatch metrics
 
 ## Quickstart
 
-Install from source:
+Install from PyPI:
+
+```bash
+pip install aws-lambda-slo-optimizer
+```
+
+Install from source for development:
 
 ```bash
 git clone https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer.git
@@ -79,6 +98,18 @@ Run a dry-run controller evaluation:
 lambdaopt watch my-function --p95 500 --window 15m --dry-run --region us-east-1
 ```
 
+Check local and AWS readiness before benchmarking:
+
+```bash
+lambdaopt doctor my-function --region us-east-1 --include-logs
+```
+
+Generate least-privilege IAM policy JSON:
+
+```bash
+lambdaopt iam generate --mode analyze-with-logs --function my-function --region us-east-1 --account-id 123456789012
+```
+
 ## Sample Output
 
 ```text
@@ -107,6 +138,47 @@ LambdaOpt is conservative by design:
 
 Read more in [docs/safety.md](docs/safety.md).
 
+## Security Model
+
+LambdaOpt uses the boto3 credential provider chain and never asks for AWS access keys. Prefer AWS profiles, SSO, or IAM roles, and avoid broad policies such as `AdministratorAccess`. Current AWS workflows are read-only for configuration; benchmark commands can invoke approved functions and should be scoped accordingly. Use `lambdaopt iam generate` to create least-privilege policy JSON for each usage mode.
+
+LambdaOpt does not dump raw environment variables, does not serialize boto3 credential objects, and redacts likely sensitive payload/report values before writing logs or reports. Generated reports are local files and do not include raw benchmark payload contents by default.
+
+## Check Your Environment With `lambdaopt doctor`
+
+Use `doctor` before real AWS benchmarking or analysis to verify local setup, region/profile resolution, Lambda metadata access, CloudWatch permissions, and optional CloudWatch Logs access:
+
+```bash
+lambdaopt doctor my-function --region us-east-1
+lambdaopt doctor my-function --region us-east-1 --include-logs
+```
+
+`doctor` does not invoke Lambda functions and does not mutate AWS resources.
+
+## Generate Least-Privilege IAM Policy
+
+Generate a scoped IAM policy for the LambdaOpt workflow you want to run:
+
+```bash
+lambdaopt iam generate --mode analyze-with-logs --function my-function --region us-east-1 --account-id 123456789012
+```
+
+If `--account-id` is omitted, LambdaOpt can infer it with STS `GetCallerIdentity` through the standard boto3 provider chain. Generated policies do not include `AdministratorAccess` or Lambda mutation actions.
+
+## No AWS Credentials In CI
+
+GitHub Actions runs format checks, linting, mypy, pytest, security regression tests, and package build using mocks and local fixtures only. CI does not require AWS credentials and must not reference `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or `AWS_SESSION_TOKEN`.
+
+## No Production Mutation By Default
+
+Production mutation is intentionally out of scope for the current beta. LambdaOpt does not update function memory, architecture, timeout, aliases, versions, or provisioned concurrency. Benchmark commands may invoke approved functions, so use non-production functions or explicit candidate mappings for first runs.
+
+## Security and IAM
+
+See [docs/security.md](docs/security.md) and [docs/iam-permissions.md](docs/iam-permissions.md) for command-level permissions and copy-pasteable IAM policy examples.
+
+For a safe first real-AWS validation path, see the [AWS smoke test guide](docs/smoke-test.md). It uses a sandbox or non-production Lambda function and does not require administrator permissions.
+
 ## Lambda Power Tuning Comparison
 
 AWS Lambda Power Tuning focuses on memory and power tradeoffs by running controlled benchmarks across Lambda memory sizes. LambdaOpt is complementary. It focuses on production SLO-constrained deployment recommendations using benchmark results, CloudWatch metrics, cold-start signals, cost estimates, and dry-run operational guardrails.
@@ -118,12 +190,18 @@ Use Lambda Power Tuning when you want a Step Functions-driven memory benchmark. 
 - [Installation](docs/installation.md)
 - [Usage](docs/usage.md)
 - [Architecture](docs/architecture.md)
+- [Candidate Benchmarking](docs/candidate-benchmarking.md)
 - [Design](docs/design.md)
 - [Safety](docs/safety.md)
+- [Security](docs/security.md)
+- [IAM Permissions](docs/iam-permissions.md)
+- [AWS Smoke Test](docs/smoke-test.md)
 - [CloudWatch Analysis](docs/cloudwatch-analysis.md)
 - [Cost Model](docs/cost-model.md)
 - [Cold Start Analysis](docs/cold-start-analysis.md)
 - [Dashboard](docs/dashboard.md)
+- [Release Checklist](docs/release.md)
+- [PyPI Release](docs/pypi-release.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Development
@@ -135,9 +213,35 @@ make check
 
 CI runs Ruff format check, Ruff lint, mypy, pytest, and package build.
 
+## Verify Locally Before Pushing
+
+Run the same core checks locally before pushing:
+
+```bash
+make check
+python -m pytest
+python -m build
+```
+
+`make check` runs formatting checks, linting, type checking, tests, and package build.
+
+## CI Expectations
+
+GitHub Actions uses mocked or stubbed AWS calls only. No AWS credentials or AWS secrets are required in CI, and CI must not run real AWS integration tests. Real AWS smoke tests should be run manually and locally against explicitly approved functions, profiles, and regions.
+
+The PyPI publishing workflow uses Trusted Publishing and does not store PyPI API tokens or AWS credentials.
+
+## Known Limitations
+
+- No production mutation by default.
+- Benchmarking different configurations requires candidate test functions or future alias-based workflows.
+- CloudWatch percentile availability may vary by traffic volume and metric query behavior.
+- Cold-start analysis depends on CloudWatch Logs access and log completeness.
+- Cost estimates are approximate and configurable.
+
 ## Status
 
-LambdaOpt is pre-alpha. The local optimizer, simulator, report generation, read-only AWS metadata planning, current-config benchmarking, separate test-function candidate benchmarking, CloudWatch analysis, cold-start analysis, provisioned concurrency recommendation, architecture comparison, and dry-run controller are implemented and tested. Production mutation remains intentionally out of scope.
+LambdaOpt is a `v0.1.0` production beta. The local optimizer, simulator, report generation, read-only AWS metadata planning, current-config benchmarking, separate test-function candidate benchmarking, CloudWatch analysis, cold-start analysis, provisioned concurrency recommendation, architecture comparison, and dry-run controller are implemented and tested. Production mutation remains intentionally out of scope.
 
 ## Roadmap
 

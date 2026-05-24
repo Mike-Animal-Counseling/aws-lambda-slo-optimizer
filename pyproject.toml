@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["aws", "lambda", "slo", "optimization", "cloudwatch", "cli"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
@@ -32,6 +32,12 @@ dependencies = [
   "PyYAML>=6.0,<7",
   "typer>=0.12,<1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer"
+Documentation = "https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer/tree/main/docs"
+Repository = "https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer"
+Issues = "https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer/issues"
 
 [project.optional-dependencies]
 aws = [
@@ -59,6 +65,19 @@ lambdaopt = "lambdaopt.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["lambdaopt"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/LICENSE",
+  "/README.md",
+  "/docs",
+  "/examples",
+  "/lambdaopt",
+  "/pyproject.toml",
+  "/tests",
+]
 
 [tool.pytest.ini_options]
 addopts = "-q"

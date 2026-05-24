@@ -40,5 +40,10 @@ jobs:
       - name: Test
         run: python -m pytest
 
+      - name: Security regression tests
+        run: |
+          python -m pytest tests/test_security_redaction.py tests/test_no_credentials_in_reports.py tests/test_doctor.py tests/test_iam_generate.py
+          python -c "from pathlib import Path; forbidden=['AWS_'+'ACCESS_KEY_ID','AWS_'+'SECRET_ACCESS_KEY','AWS_'+'SESSION_TOKEN']; text='\n'.join(p.read_text(encoding='utf-8') for p in Path('.github/workflows').glob('*.yml')); found=[item for item in forbidden if item in text]; raise SystemExit('Forbidden AWS secret references in workflows: '+', '.join(found) if found else 0)"
+
       - name: Build package
         run: python -m build

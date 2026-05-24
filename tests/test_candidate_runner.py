@@ -192,6 +192,7 @@ def test_cli_tune_with_candidates_creates_report(
             "1000000",
             "--trials",
             "3",
+            "--yes",
             "--payload",
             str(payload_path),
             "--output",

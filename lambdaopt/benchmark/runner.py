@@ -13,6 +13,7 @@ from lambdaopt.benchmark.invoker import (
 from lambdaopt.benchmark.result_collector import collect_benchmark_result
 from lambdaopt.exceptions import LambdaOptValidationError
 from lambdaopt.models import BenchmarkResult, LambdaConfig
+from lambdaopt.security import payload_metadata
 
 CURRENT_CONFIG_ONLY_WARNING = (
     "This benchmark invokes only the currently deployed Lambda configuration. "
@@ -66,6 +67,7 @@ def run_current_config_benchmark(
         region=region,
     )
     result.metadata["warning_current_config_only"] = CURRENT_CONFIG_ONLY_WARNING
+    result.metadata["payload"] = payload_metadata(payload_path)
     result.metadata["warmup_invocations"] = warmup
     result.metadata["delay_ms"] = delay_ms
     return result

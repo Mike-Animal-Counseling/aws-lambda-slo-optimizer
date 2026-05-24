@@ -1,6 +1,6 @@
 # Roadmap
 
-LambdaOpt is pre-alpha. The current focus is correctness, safety, and clear recommendations before automation.
+LambdaOpt is a production beta. The current focus is correctness, safety, least-privilege AWS workflows, and clear recommendations before automation.
 
 ## Milestone 1: Release-Ready Foundation
 
@@ -15,7 +15,7 @@ Status: implemented.
 
 ## Milestone 2: Local and Safe AWS Workflows
 
-Status: partially implemented.
+Status: implemented for production-beta workflows.
 
 - Read-only Lambda metadata planning.
 - Current deployed configuration benchmarking.
@@ -23,6 +23,8 @@ Status: partially implemented.
 - CloudWatch metric analysis.
 - CloudWatch Logs cold-start analysis.
 - Dry-run watch controller.
+- Environment readiness checks with `lambdaopt doctor`.
+- Least-privilege IAM policy generation with `lambdaopt iam generate`.
 
 Remaining work:
 
@@ -56,8 +58,8 @@ Planned:
 
 - Dashboard export.
 - Scheduled analysis examples.
-- GitHub release automation.
-- Example IAM policies.
+- Expanded GitHub release automation.
+- More example IAM policy variants.
 - More complete AWS integration tests with mocks and fixtures.
 
 ## Non-Goals for Now
