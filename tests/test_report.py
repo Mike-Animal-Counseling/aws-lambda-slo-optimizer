@@ -53,6 +53,7 @@ def test_report_writers_create_expected_content(tmp_path: Path) -> None:
     assert benchmark_payload["results"][0]["config"]["memory_mb"] == 1024
     assert recommendation_payload["recommended_config"]["architecture"] == "arm64"
     assert "# LambdaOpt Optimization Report" in markdown
+    assert "## SLO Risk Assessment" in markdown
     assert "p95 latency target: 500 ms" in markdown
     assert "1024 MB" in markdown
     assert "512mb-x86_64-pc0" in markdown

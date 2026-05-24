@@ -12,6 +12,7 @@ from lambdaopt.analysis.cold_start import analyze_cold_starts_from_messages
 from lambdaopt.analysis.cost_model import estimate_lambda_cost
 from lambdaopt.analysis.latency import calculate_latency_stats
 from lambdaopt.analysis.pareto import mark_pareto_frontier
+from lambdaopt.analysis.risk import assess_config_risk
 from lambdaopt.aws.cloudwatch_client import CloudWatchClient, LambdaCloudWatchMetrics, parse_window
 from lambdaopt.aws.lambda_client import LambdaClient
 from lambdaopt.aws.logs_client import LogsClient
@@ -955,15 +956,19 @@ def _analyze_benchmark_results(
                 cli_config.cost_rates.provisioned_concurrency_execution_cost_per_gb_second_usd
             ),
         )
+        cold_start_rate = result.cold_starts / latency.sample_count
+        analyzed = AnalyzedConfig(
+            config=result.config,
+            latency=latency,
+            cost=cost,
+            cold_start_rate=cold_start_rate,
+            slo_passed=latency.p95_ms <= target_p95_ms,
+            errors=result.errors,
+            metadata=result.metadata,
+        )
         analyzed_configs.append(
-            AnalyzedConfig(
-                config=result.config,
-                latency=latency,
-                cost=cost,
-                cold_start_rate=result.cold_starts / latency.sample_count,
-                slo_passed=latency.p95_ms <= target_p95_ms,
-                errors=result.errors,
-                metadata=result.metadata,
+            analyzed.model_copy(
+                update={"risk": assess_config_risk(analyzed, target_p95_ms=target_p95_ms)}
             )
         )
 

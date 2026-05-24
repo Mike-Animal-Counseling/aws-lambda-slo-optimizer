@@ -61,6 +61,10 @@ def render_markdown_report(
         "",
         recommendation.reason_summary,
         "",
+        "## SLO Risk Assessment",
+        "",
+        _risk_summary(analyzed_configs, recommendation),
+        "",
         "## Benchmark Results",
         "",
         _benchmark_table(analyzed_configs),
@@ -86,8 +90,8 @@ def render_markdown_report(
 def _benchmark_table(analyzed_configs: list[AnalyzedConfig]) -> str:
     header = (
         "| Candidate | Function ref | Source | Memory | Arch | p50 | p95 | p99 | "
-        "Cold start rate | Monthly cost | SLO | Pareto |\n"
-        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---|---|"
+        "Cold start rate | Monthly cost | Risk | SLO | Pareto |\n"
+        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---|---|---|"
     )
     rows = [
         (
@@ -101,6 +105,7 @@ def _benchmark_table(analyzed_configs: list[AnalyzedConfig]) -> str:
             f"| {config.latency.p99_ms:.1f} ms "
             f"| {config.cold_start_rate:.1%} "
             f"| ${config.cost.total_cost_usd:.2f} "
+            f"| {_risk_label(config)} "
             f"| {'Pass' if config.slo_passed and config.errors == 0 else 'Fail'} "
             f"| {'Dominated' if config.dominated else 'Frontier'} |"
         )
@@ -110,6 +115,40 @@ def _benchmark_table(analyzed_configs: list[AnalyzedConfig]) -> str:
         )
     ]
     return "\n".join([header, *rows])
+
+
+def _risk_summary(
+    analyzed_configs: list[AnalyzedConfig],
+    recommendation: Recommendation,
+) -> str:
+    recommended = next(
+        (
+            config
+            for config in analyzed_configs
+            if config.config == recommendation.recommended_config
+        ),
+        None,
+    )
+    if recommended is None or recommended.risk is None:
+        return "- Risk assessment was not available for this report."
+
+    risk = recommended.risk
+    lines = [
+        f"- Level: {risk.level}",
+        f"- Score: {risk.score}/100",
+        f"- Risk confidence: {risk.confidence:.0%}",
+        "- Reasons:",
+        *[f"  - {reason}" for reason in risk.reasons],
+        "- Suggested next actions:",
+        *[f"  - {action}" for action in risk.next_actions],
+    ]
+    return "\n".join(lines)
+
+
+def _risk_label(config: AnalyzedConfig) -> str:
+    if config.risk is None:
+        return "-"
+    return f"{config.risk.level} ({config.risk.score}/100)"
 
 
 def _candidate_name(config: AnalyzedConfig) -> str:

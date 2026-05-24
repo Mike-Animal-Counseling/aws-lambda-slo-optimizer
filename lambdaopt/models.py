@@ -76,6 +76,18 @@ class CostEstimate(BaseModel):
     cost_per_million_requests_usd: float = Field(ge=0)
 
 
+class RiskAssessment(BaseModel):
+    """Production-oriented SLO risk assessment for one analyzed configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    score: int = Field(ge=0, le=100)
+    level: Literal["low", "medium", "high", "unknown"]
+    confidence: float = Field(ge=0, le=1)
+    reasons: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)
+
+
 class AnalyzedConfig(BaseModel):
     """Combined latency, cost, and SLO analysis for one Lambda configuration."""
 
@@ -89,6 +101,7 @@ class AnalyzedConfig(BaseModel):
     errors: int = Field(default=0, ge=0)
     dominated: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
+    risk: RiskAssessment | None = None
 
 
 class Recommendation(BaseModel):

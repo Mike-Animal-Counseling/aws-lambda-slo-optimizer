@@ -4,6 +4,18 @@ All notable changes to LambdaOpt will be documented in this file.
 
 This project follows semantic versioning for public releases.
 
+## Unreleased
+
+### Added
+
+- Production-oriented SLO risk scoring for benchmarked configs using p95, p99, errors, cold-start rate, and sample confidence.
+- Risk assessment details in Markdown reports and machine-readable analyzed config output.
+
+### Changed
+
+- Pareto frontier marking now considers p99, errors, and cold-start rate in addition to cost and p95.
+- Recommendation confidence is capped by the selected config's risk confidence.
+
 ## v0.1.0 - Production Beta
 
 Initial production beta release for safe, SLO-aware AWS Lambda optimization workflows.

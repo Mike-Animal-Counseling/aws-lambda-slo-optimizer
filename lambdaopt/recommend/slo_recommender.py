@@ -1,7 +1,8 @@
 """SLO-aware recommendation logic."""
 
+from lambdaopt.analysis.risk import assess_config_risk
 from lambdaopt.exceptions import LambdaOptValidationError
-from lambdaopt.models import AnalyzedConfig, Recommendation
+from lambdaopt.models import AnalyzedConfig, Recommendation, RiskAssessment
 from lambdaopt.recommend.architecture_recommender import arm64_recommendation_reason
 
 
@@ -30,10 +31,19 @@ def recommend_cheapest_slo_config(
             analyzed_configs,
             target_p95_ms,
         )
+        risk = _risk_for_config(recommended, target_p95_ms)
         if architecture_reason:
             reason_summary = f"{reason_summary} {architecture_reason}"
+        reason_summary = f"{reason_summary} Risk level is {risk.level} ({risk.score}/100)."
         warnings.extend(architecture_warnings)
-        confidence = _confidence_for_passing_config(recommended, analyzed_configs)
+        if risk.level == "high":
+            warnings.append("Recommended configuration has high production risk signals.")
+        elif risk.level == "medium":
+            warnings.append("Recommended configuration has medium production risk signals.")
+        confidence = min(
+            _confidence_for_passing_config(recommended, analyzed_configs),
+            risk.confidence,
+        )
     else:
         recommended = min(
             analyzed_configs,
@@ -142,6 +152,10 @@ def _confidence_for_passing_config(
     if enough_samples and clear_cost_winner:
         return 0.9
     return 0.6
+
+
+def _risk_for_config(config: AnalyzedConfig, target_p95_ms: float) -> RiskAssessment:
+    return config.risk or assess_config_risk(config, target_p95_ms=target_p95_ms)
 
 
 def _normalized_violation(config: AnalyzedConfig, target_p95_ms: float) -> float:

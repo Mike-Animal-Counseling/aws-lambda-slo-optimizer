@@ -26,13 +26,33 @@ When no configuration passes the SLO, the recommender selects the least-bad opti
 
 ## Pareto Frontier
 
-Pareto analysis marks configurations as dominated when another configuration has:
+Pareto analysis marks configurations as dominated when another configuration is no worse across
+the production signals LambdaOpt can compare locally:
 
 - cost less than or equal to the current configuration,
 - p95 less than or equal to the current configuration,
-- at least one of those dimensions strictly better.
+- p99 less than or equal to the current configuration,
+- error count less than or equal to the current configuration,
+- cold-start rate less than or equal to the current configuration,
+- at least one dimension strictly better.
 
-Dominated configurations are usually poor deployment candidates because another measured option is no worse on both cost and p95 latency.
+Dominated configurations are usually poor deployment candidates because another measured option is
+no worse on cost, latency, and basic production risk signals.
+
+## SLO Risk Score
+
+LambdaOpt assigns a local, deterministic risk assessment to analyzed benchmark configs. The score
+is not a black-box model. It is a transparent rule-based summary of:
+
+- p95 SLO pass/fail and whether p95 is close to the target,
+- p99 tail-latency risk,
+- benchmark errors,
+- cold-start rate,
+- latency sample count.
+
+The risk score influences recommendation confidence and adds concrete next actions such as
+collecting more samples, investigating cold starts, or testing provisioned concurrency. It does not
+authorize production mutation.
 
 ## Cost Model
 

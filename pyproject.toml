@@ -52,6 +52,7 @@ dashboard = [
 ]
 dev = [
   "build>=1.2",
+  "hatchling>=1.25",
   "matplotlib>=3.8",
   "mypy>=1.10",
   "pre-commit>=3.7",
