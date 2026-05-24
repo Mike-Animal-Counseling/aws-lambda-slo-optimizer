@@ -81,6 +81,7 @@ include = [
 
 [tool.pytest.ini_options]
 addopts = "-q"
+cache_dir = ".pytest-cache"
 testpaths = ["tests"]
 
 [tool.ruff]
