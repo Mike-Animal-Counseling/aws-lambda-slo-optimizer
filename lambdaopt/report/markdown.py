@@ -55,11 +55,16 @@ def render_markdown_report(
         f"- Memory: {recommended.memory_mb} MB",
         f"- Architecture: {recommended.architecture}",
         f"- Provisioned concurrency: {recommended.provisioned_concurrency}",
-        f"- Confidence: {recommendation.confidence:.0%}",
+        f"- Decision: {_decision_label(recommendation)}",
+        f"- Evidence strength: {recommendation.evidence_strength.title()}",
         "",
         "## Why This Config Was Selected",
         "",
         recommendation.reason_summary,
+        "",
+        "## Evidence",
+        "",
+        _evidence(recommendation),
         "",
         "## SLO Risk Assessment",
         "",
@@ -79,12 +84,25 @@ def render_markdown_report(
         "",
         "## Next Steps",
         "",
+        f"- {recommendation.next_step}",
         "- Run a larger benchmark sample before production rollout.",
         "- Compare results against CloudWatch metrics once AWS integrations are enabled.",
         "- Re-run tuning after meaningful traffic, code, dependency, or runtime changes.",
         "",
     ]
     return "\n".join(lines)
+
+
+def _decision_label(recommendation: Recommendation) -> str:
+    if recommendation.decision == "choose":
+        return "Choose recommended config"
+    return "No safe config found"
+
+
+def _evidence(recommendation: Recommendation) -> str:
+    if not recommendation.evidence_reasons:
+        return "- Evidence details were not available."
+    return "\n".join(f"- {reason}" for reason in recommendation.evidence_reasons)
 
 
 def _benchmark_table(analyzed_configs: list[AnalyzedConfig]) -> str:

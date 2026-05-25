@@ -33,6 +33,8 @@ def test_report_writers_create_expected_content(tmp_path: Path) -> None:
         rejected_reasons={"512mb-x86_64-pc0": "p95 exceeded the target."},
         warnings=[],
         alternatives=[],
+        evidence_strength="high",
+        evidence_reasons=["p95 is comfortably below the target."],
         confidence=0.9,
     )
 
@@ -53,6 +55,8 @@ def test_report_writers_create_expected_content(tmp_path: Path) -> None:
     assert benchmark_payload["results"][0]["config"]["memory_mb"] == 1024
     assert recommendation_payload["recommended_config"]["architecture"] == "arm64"
     assert "# LambdaOpt Optimization Report" in markdown
+    assert "Evidence strength: High" in markdown
+    assert "p95 is comfortably below the target." in markdown
     assert "## SLO Risk Assessment" in markdown
     assert "p95 latency target: 500 ms" in markdown
     assert "1024 MB" in markdown

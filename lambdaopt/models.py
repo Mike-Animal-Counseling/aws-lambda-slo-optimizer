@@ -110,10 +110,17 @@ class Recommendation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     recommended_config: LambdaConfig
+    decision: Literal["choose", "no_safe_config"] = "choose"
     reason_summary: str = Field(min_length=1)
+    evidence_strength: Literal["high", "medium", "low"] = "medium"
+    evidence_reasons: list[str] = Field(default_factory=list)
     rejected_reasons: dict[str, str] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     alternatives: list[AnalyzedConfig] = Field(default_factory=list)
+    next_step: str = Field(
+        default="Validate the recommendation with a larger benchmark before production rollout.",
+        min_length=1,
+    )
     confidence: float = Field(ge=0, le=1)
 
 

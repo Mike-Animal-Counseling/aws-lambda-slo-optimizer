@@ -37,7 +37,7 @@ Remaining work:
 Planned:
 
 - Configurable p95 and p99 SLO policies.
-- Explicit confidence scoring inputs in reports.
+- Explicit evidence-strength inputs in reports.
 - Region-aware pricing configuration.
 - More architecture compatibility checks.
 - Better low-traffic percentile handling.

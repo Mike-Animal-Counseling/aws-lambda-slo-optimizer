@@ -1281,7 +1281,7 @@ def _print_summary(
         f"{recommendation.recommended_config.memory_mb}MB "
         f"{recommendation.recommended_config.architecture} "
         f"for p95 <= {target_p95_ms:g}ms "
-        f"({recommendation.confidence:.0%} confidence)."
+        f"({recommendation.evidence_strength} evidence)."
     )
     typer.echo(f"Reports written to {output_dir}")
 

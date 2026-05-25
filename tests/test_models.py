@@ -54,12 +54,15 @@ def test_valid_models_parse_successfully() -> None:
         rejected_reasons={"512-x86_64": "p95 latency exceeded the SLO."},
         warnings=[],
         alternatives=[analyzed],
+        evidence_strength="high",
+        evidence_reasons=["100 samples with no errors."],
         confidence=0.9,
     )
 
     assert benchmark.config == config
     assert analyzed.slo_passed is True
     assert recommendation.recommended_config.memory_mb == 1024
+    assert recommendation.evidence_strength == "high"
 
 
 def test_invalid_memory_fails() -> None:

@@ -1,5 +1,7 @@
 """SLO-aware recommendation logic."""
 
+from typing import Literal
+
 from lambdaopt.analysis.risk import assess_config_risk
 from lambdaopt.exceptions import LambdaOptValidationError
 from lambdaopt.models import AnalyzedConfig, Recommendation, RiskAssessment
@@ -25,6 +27,7 @@ def recommend_cheapest_slo_config(
     if passing_configs:
         recommended = min(passing_configs, key=lambda config: config.cost.total_cost_usd)
         warnings: list[str] = []
+        decision: Literal["choose", "no_safe_config"] = "choose"
         reason_summary = _passing_reason_summary(recommended, target_p95_ms)
         architecture_reason, architecture_warnings = _architecture_reason(
             recommended,
@@ -40,10 +43,18 @@ def recommend_cheapest_slo_config(
             warnings.append("Recommended configuration has high production risk signals.")
         elif risk.level == "medium":
             warnings.append("Recommended configuration has medium production risk signals.")
-        confidence = min(
-            _confidence_for_passing_config(recommended, analyzed_configs),
-            risk.confidence,
+        base_confidence, evidence_reasons = _evidence_for_passing_config(
+            recommended,
+            analyzed_configs,
+            target_p95_ms,
         )
+        confidence = min(base_confidence, risk.confidence)
+        if risk.confidence < base_confidence:
+            evidence_reasons.append(
+                f"Risk evidence limits recommendation strength to {risk.confidence:.0%}."
+            )
+        evidence_reasons.append(f"Risk assessment is {risk.level} ({risk.score}/100).")
+        next_step = _next_step_for_passing_config(risk.level)
     else:
         recommended = min(
             analyzed_configs,
@@ -53,12 +64,20 @@ def recommend_cheapest_slo_config(
             "No configuration satisfied the p95 SLO without errors; "
             "recommending the closest option."
         ]
+        decision = "no_safe_config"
         reason_summary = (
             f"No configuration met p95 target {target_p95_ms:g}ms. "
             f"The closest option is {_config_label(recommended)} with p95 "
             f"{recommended.latency.p95_ms:g}ms."
         )
         confidence = 0.25
+        evidence_reasons = [
+            "No benchmarked configuration passed the p95 SLO without errors.",
+            f"Closest p95 was {recommended.latency.p95_ms:g}ms against target {target_p95_ms:g}ms.",
+        ]
+        next_step = (
+            "Do not roll out a new config yet; benchmark more options or inspect bottlenecks."
+        )
 
     rejected_reasons = {
         _config_key(config): _rejected_reason(config, recommended, target_p95_ms)
@@ -72,10 +91,14 @@ def recommend_cheapest_slo_config(
 
     return Recommendation(
         recommended_config=recommended.config,
+        decision=decision,
         reason_summary=reason_summary,
+        evidence_strength=_evidence_strength(confidence),
+        evidence_reasons=evidence_reasons,
         rejected_reasons=rejected_reasons,
         warnings=warnings,
         alternatives=alternatives,
+        next_step=next_step,
         confidence=confidence,
     )
 
@@ -134,11 +157,21 @@ def _rejected_reason(
     return f"{label} rejected because it was not the best SLO-safe cost and latency tradeoff."
 
 
-def _confidence_for_passing_config(
+def _evidence_for_passing_config(
     recommended: AnalyzedConfig,
     analyzed_configs: list[AnalyzedConfig],
-) -> float:
+    target_p95_ms: float,
+) -> tuple[float, list[str]]:
     enough_samples = recommended.latency.sample_count >= 30
+    evidence_reasons = [
+        (
+            f"{recommended.latency.sample_count} latency samples were collected."
+            if enough_samples
+            else f"Only {recommended.latency.sample_count} latency samples were collected."
+        ),
+        "Recommended configuration recorded zero errors.",
+    ]
+    slo_margin = max(0.0, target_p95_ms - recommended.latency.p95_ms) / target_p95_ms
     passing_configs = [
         config
         for config in analyzed_configs
@@ -148,10 +181,35 @@ def _confidence_for_passing_config(
         config == recommended or config.cost.total_cost_usd >= recommended.cost.total_cost_usd * 1.1
         for config in passing_configs
     )
+    if clear_cost_winner:
+        evidence_reasons.append(
+            "Recommended configuration is a clear cost winner among close SLO-safe options."
+        )
+    else:
+        evidence_reasons.append("Several close SLO-safe options have similar cost or latency.")
+    evidence_reasons.append(
+        f"Recommended p95 is {recommended.latency.p95_ms:g}ms ({slo_margin:.0%} below target)."
+    )
 
     if enough_samples and clear_cost_winner:
-        return 0.9
-    return 0.6
+        return 0.9, evidence_reasons
+    return 0.6, evidence_reasons
+
+
+def _evidence_strength(confidence: float) -> Literal["high", "medium", "low"]:
+    if confidence >= 0.8:
+        return "high"
+    if confidence >= 0.5:
+        return "medium"
+    return "low"
+
+
+def _next_step_for_passing_config(risk_level: str) -> str:
+    if risk_level == "low":
+        return "Validate in a sandbox or staged alias before production rollout."
+    if risk_level == "medium":
+        return "Run a larger benchmark and inspect p99 before rollout."
+    return "Investigate risk signals before adopting this configuration."
 
 
 def _risk_for_config(config: AnalyzedConfig, target_p95_ms: float) -> RiskAssessment:

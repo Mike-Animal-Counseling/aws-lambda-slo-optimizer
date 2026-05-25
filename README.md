@@ -25,7 +25,7 @@ This beta is intended for local evaluation, report generation, read-only AWS ana
 - Detects cold-start-driven tail latency using CloudWatch Logs REPORT lines when available.
 - Analyzes CloudWatch production metrics for duration, invocations, errors, throttles, and concurrency.
 - Computes Pareto frontiers and recommends the cheapest SLO-satisfying configuration.
-- Scores production-oriented SLO risk from p95, p99, errors, cold starts, and sample confidence.
+- Scores production-oriented SLO risk from p95, p99, errors, cold starts, and sample strength.
 - Recommends safe next actions such as benchmarking, investigating throttles, testing arm64, or testing provisioned concurrency.
 - Defaults to dry-run workflows and does not mutate production Lambda configuration.
 
@@ -148,7 +148,7 @@ lambdaopt quickstart
 ## Sample Output
 
 ```text
-Recommendation: 1024MB arm64 for p95 <= 500ms (90% confidence).
+Recommendation: 1024MB arm64 for p95 <= 500ms (high evidence).
 Reports written to reports/sample
 ```
 

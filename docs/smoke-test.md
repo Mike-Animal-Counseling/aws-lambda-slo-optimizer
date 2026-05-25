@@ -107,7 +107,7 @@ Expected output shape:
 
 ```text
 Benchmarked current deployed config only; no memory or architecture comparison was performed.
-Recommendation: 512MB x86_64 for p95 <= 500ms (60% confidence).
+Recommendation: 512MB x86_64 for p95 <= 500ms (medium evidence).
 Reports written to reports/smoke
 ```
 

@@ -107,8 +107,13 @@ def _render_recommendation(st: Any, recommendation: dict[str, Any]) -> None:
     col1, col2, col3 = st.columns(3)
     col1.metric("Memory", f"{config.get('memory_mb', 'unknown')} MB")
     col2.metric("Architecture", str(config.get("architecture", "unknown")))
-    col3.metric("Confidence", f"{float(recommendation.get('confidence', 0)):.0%}")
+    col3.metric("Evidence", str(recommendation.get("evidence_strength", "unknown")).title())
     st.write(recommendation.get("reason_summary", "No recommendation summary available."))
+    evidence = recommendation.get("evidence_reasons", [])
+    if evidence:
+        st.write("Evidence")
+        for reason in evidence:
+            st.write(f"- {reason}")
     warnings = recommendation.get("warnings", [])
     if warnings:
         st.warning("\n".join(str(warning) for warning in warnings))

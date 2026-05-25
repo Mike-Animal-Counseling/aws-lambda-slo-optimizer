@@ -20,9 +20,9 @@ The primary path is:
 1. Filter configurations where p95 is at or below the target and errors are zero.
 2. Pick the lowest total monthly cost among passing configurations.
 3. Explain why other configurations were rejected.
-4. Assign confidence based on sample quality and whether a clear passing winner exists.
+4. Assign evidence strength based on sample quality and whether a clear passing winner exists.
 
-When no configuration passes the SLO, the recommender selects the least-bad option by normalized p95 violation and emits a low-confidence warning. This is a diagnostic recommendation, not a production rollout instruction.
+When no configuration passes the SLO, the recommender selects the least-bad option by normalized p95 violation and emits a low-evidence warning. This is a diagnostic recommendation, not a production rollout instruction.
 
 ## Pareto Frontier
 
@@ -50,7 +50,7 @@ is not a black-box model. It is a transparent rule-based summary of:
 - cold-start rate,
 - latency sample count.
 
-The risk score influences recommendation confidence and adds concrete next actions such as
+The risk score influences recommendation evidence strength and adds concrete next actions such as
 collecting more samples, investigating cold starts, or testing provisioned concurrency. It does not
 authorize production mutation.
 

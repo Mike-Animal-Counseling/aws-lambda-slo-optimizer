@@ -58,6 +58,9 @@ def test_recommender_picks_cheapest_passing_config() -> None:
 
     assert recommendation.recommended_config.memory_mb == 1024
     assert recommendation.confidence == 0.9
+    assert recommendation.evidence_strength == "high"
+    assert recommendation.decision == "choose"
+    assert any("latency samples" in reason for reason in recommendation.evidence_reasons)
     assert (
         "512MB x86_64 rejected because p95 320ms exceeds target 250ms"
         in (recommendation.rejected_reasons["512mb-x86_64-pc0"])
@@ -77,6 +80,8 @@ def test_recommender_handles_no_passing_config_case() -> None:
 
     assert recommendation.recommended_config.memory_mb == 1024
     assert recommendation.confidence == 0.25
+    assert recommendation.evidence_strength == "low"
+    assert recommendation.decision == "no_safe_config"
     assert recommendation.warnings == [
         "No configuration satisfied the p95 SLO without errors; recommending the closest option."
     ]

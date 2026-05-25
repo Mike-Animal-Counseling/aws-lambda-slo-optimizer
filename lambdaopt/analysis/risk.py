@@ -19,7 +19,7 @@ def assess_config_risk(
     target_p95_ms: float,
     target_p99_ms: float | None = None,
 ) -> RiskAssessment:
-    """Assess production risk from latency, errors, cold starts, and sample confidence."""
+    """Assess production risk from latency, errors, cold starts, and sample evidence."""
     if target_p95_ms <= 0:
         raise LambdaOptValidationError("target_p95_ms must be positive.")
     if target_p99_ms is not None and target_p99_ms <= 0:
