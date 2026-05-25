@@ -45,7 +45,7 @@ lambdaopt version --plain
 Expected output:
 
 ```text
-0.2.0
+0.2.1
 ```
 
 ## Tagging
@@ -53,8 +53,8 @@ Expected output:
 Create the release tag after local checks and GitHub CI pass:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 ## GitHub Release

@@ -6,6 +6,25 @@ This project follows semantic versioning for public releases.
 
 ## Unreleased
 
+## v0.2.1 - Guided Onboarding Beta
+
+This release makes LambdaOpt easier for first-time users without removing advanced workflows.
+
+### Added
+
+- `lambdaopt start` guided first-run workflow.
+- Local no-AWS demo path that creates a first optimization report with one command.
+- AWS readiness onboarding path that runs safe doctor checks and prints the next recommended command.
+- Optional `lambdaopt start ... --run-analyze` path for read-only CloudWatch analysis after readiness checks pass.
+- CLI help grouping for Start here, Core workflows, and Advanced commands.
+- Start command regression tests.
+
+### Changed
+
+- README and usage docs now recommend `lambdaopt start` as the primary first command.
+- `lambdaopt quickstart` now points users to `start` first.
+- CloudWatch analysis workflow is shared by `analyze` and `start --run-analyze`.
+
 ## v0.2.0 - Production Risk Scoring Beta
 
 This release upgrades LambdaOpt's local optimizer from p95/cost-only recommendation toward

@@ -8,16 +8,40 @@ LambdaOpt is a CLI for SLO-aware Lambda optimization. It can run fully local sim
 lambdaopt version
 ```
 
-## Quickstart
+## Start
 
-If you are not sure where to start, run:
+If you are not sure where to start, run the guided first step:
+
+```bash
+lambdaopt start
+```
+
+With no function name, `start` checks the local environment, runs a deterministic local demo,
+and writes a report to `reports/start`. It does not call AWS.
+
+For a sandbox or non-production Lambda, pass the function name:
+
+```bash
+lambdaopt start my-function --region us-east-1 --p95 500
+```
+
+This runs read-only readiness checks and prints the next safest command. It does not invoke
+the Lambda function and does not mutate AWS resources.
+
+If readiness passes and you want the guided flow to run read-only CloudWatch analysis:
+
+```bash
+lambdaopt start my-function --region us-east-1 --p95 500 --run-analyze
+```
+
+To print the route without running anything:
 
 ```bash
 lambdaopt quickstart
 ```
 
-This prints the shortest safe path for local-only use first, then AWS commands for a sandbox or
-non-production Lambda. It does not call AWS and does not mutate anything.
+New users usually only need `start`, `doctor`, and `simulate` at first. The other commands
+remain available for explicit workflows and automation.
 
 ## Simulate
 

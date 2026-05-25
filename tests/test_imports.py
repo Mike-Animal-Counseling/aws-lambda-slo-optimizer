@@ -6,7 +6,7 @@ from lambdaopt.models import LambdaCandidateConfig, LatencyPercentile, LatencySL
 
 
 def test_package_imports() -> None:
-    assert lambdaopt.__version__ == "0.2.0"
+    assert lambdaopt.__version__ == "0.2.1"
 
 
 def test_models_validate_basic_values() -> None:
@@ -32,8 +32,8 @@ def test_quickstart_command_shows_safe_first_steps() -> None:
     result = runner.invoke(app, ["quickstart", "my-fn", "--p95", "500", "--region", "us-east-1"])
 
     assert result.exit_code == 0
+    assert "lambdaopt start" in result.stdout
     assert "lambdaopt doctor" in result.stdout
-    assert "lambdaopt simulate" in result.stdout
     assert "lambdaopt tune --input" in result.stdout
     assert "lambdaopt plan my-fn --p95 500 --region us-east-1" in result.stdout
     assert "does not mutate production" in result.stdout

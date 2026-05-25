@@ -7,7 +7,7 @@ from typing import Annotated, Literal, NoReturn
 
 import typer
 
-from lambdaopt.analysis.cloudwatch_analysis import analyze_cloudwatch_metrics
+from lambdaopt.analysis.cloudwatch_analysis import CloudWatchAnalysis, analyze_cloudwatch_metrics
 from lambdaopt.analysis.cold_start import analyze_cold_starts_from_messages
 from lambdaopt.analysis.cost_model import estimate_lambda_cost
 from lambdaopt.analysis.latency import calculate_latency_stats
@@ -30,7 +30,7 @@ from lambdaopt.benchmark.result_collector import CLIENT_OBSERVED_DURATION_WARNIN
 from lambdaopt.benchmark.runner import CURRENT_CONFIG_ONLY_WARNING, run_current_config_benchmark
 from lambdaopt.config import LambdaOptConfig, get_version, load_benchmark_results, load_config
 from lambdaopt.dashboard.app import launch_dashboard
-from lambdaopt.doctor import render_doctor_text, run_doctor
+from lambdaopt.doctor import DoctorCheck, DoctorResult, render_doctor_text, run_doctor
 from lambdaopt.exceptions import LambdaOptConfigError, LambdaOptError, LambdaOptSafetyError
 from lambdaopt.iam import (
     IamMode,
@@ -63,7 +63,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 iam_app = typer.Typer(help="Generate least-privilege IAM policies.", no_args_is_help=True)
-app.add_typer(iam_app, name="iam")
+app.add_typer(iam_app, name="iam", rich_help_panel="Advanced")
 
 lambda_client_factory = LambdaClient.from_session_options
 cloudwatch_client_factory = CloudWatchClient.from_session_options
@@ -112,7 +112,7 @@ def main(
         _handle_cli_error(exc)
 
 
-@app.command()
+@app.command(rich_help_panel="Start here")
 def version(
     plain: Annotated[
         bool,
@@ -128,7 +128,98 @@ def version(
     typer.echo(f"LambdaOpt {current_version}")
 
 
-@app.command()
+@app.command(rich_help_panel="Start here")
+def start(
+    function_name: Annotated[
+        str | None,
+        typer.Argument(help="Optional Lambda function name or ARN for AWS readiness checks."),
+    ] = None,
+    p95: Annotated[
+        float,
+        typer.Option("--p95", min=0.0, help="Target p95 latency in ms."),
+    ] = 500,
+    monthly_requests: Annotated[
+        int,
+        typer.Option("--monthly-requests", min=0, help="Monthly request count for estimates."),
+    ] = 1_000_000,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output", help="Directory where the first report will be written."),
+    ] = Path("reports/start"),
+    region: Annotated[str | None, typer.Option("--region", help="AWS region.")] = None,
+    profile: Annotated[str | None, typer.Option("--profile", help="AWS profile name.")] = None,
+    include_logs: Annotated[
+        bool,
+        typer.Option("--include-logs", help="Include CloudWatch Logs checks/analysis."),
+    ] = False,
+    run_analyze: Annotated[
+        bool,
+        typer.Option(
+            "--run-analyze",
+            help=(
+                "Run CloudWatch analyze after readiness checks pass. "
+                "Default only prints next steps."
+            ),
+        ),
+    ] = False,
+    window: Annotated[
+        str,
+        typer.Option("--window", help="CloudWatch window used with --run-analyze."),
+    ] = "24h",
+) -> None:
+    """Guided first-run workflow for local demo or safe AWS readiness."""
+    try:
+        if function_name is None:
+            recommendation = _run_start_local_demo(
+                target_p95_ms=p95,
+                monthly_requests=monthly_requests,
+                output_dir=output_dir,
+            )
+            _print_start_local_summary(recommendation, p95, output_dir)
+            return
+
+        effective_region = _resolve_region(region)
+        effective_profile = _resolve_profile(profile)
+        result = run_doctor(
+            function_name=function_name,
+            region=effective_region,
+            profile=effective_profile,
+            output_dir=output_dir,
+            include_logs=include_logs,
+        )
+        if run_analyze and result.overall_status != "fail":
+            analysis_status = _run_cloudwatch_analysis_workflow(
+                function_name=function_name,
+                window=window,
+                target_p95_ms=p95,
+                region=effective_region,
+                profile=effective_profile,
+                monthly_requests=monthly_requests,
+                include_logs=include_logs,
+                output_dir=output_dir,
+            )
+            _print_start_analyze_summary(
+                function_name=function_name,
+                window=window,
+                output_dir=output_dir,
+                analysis_status=analysis_status,
+            )
+            raise typer.Exit(0)
+
+        _print_start_aws_summary(
+            function_name=function_name,
+            target_p95_ms=p95,
+            region=effective_region,
+            output_dir=output_dir,
+            doctor_result=result,
+            include_logs=include_logs,
+        )
+        raise typer.Exit(result.exit_code)
+    except LambdaOptError as exc:
+        _handle_cli_error(exc)
+
+
+@app.command(rich_help_panel="Start here")
 def quickstart(
     function_name: Annotated[
         str | None,
@@ -147,18 +238,18 @@ def quickstart(
     name = function_name or "my-function"
     typer.echo("LambdaOpt Quickstart")
     typer.echo("")
-    typer.echo("Start here without AWS credentials:")
-    typer.echo("  lambdaopt doctor")
-    typer.echo(
-        "  lambdaopt simulate --workload cpu-bound "
-        f"--p95 {p95:g} --monthly-requests 1000000 --output reports/cpu"
-    )
+    typer.echo("Best first command:")
+    typer.echo("  lambdaopt start")
+    typer.echo("")
+    typer.echo("Without AWS credentials:")
+    typer.echo(f"  lambdaopt start --p95 {p95:g} --output reports/start")
     typer.echo(
         "  lambdaopt tune --input examples/sample_results.json "
         f"--p95 {p95:g} --monthly-requests 1000000 --output reports/sample"
     )
     typer.echo("")
     typer.echo("When you have a sandbox or non-production Lambda:")
+    typer.echo(f"  lambdaopt start {name} --region {region} --p95 {p95:g}")
     typer.echo(f"  lambdaopt doctor {name} --region {region}")
     typer.echo(
         "  lambdaopt iam generate --mode analyze-with-logs "
@@ -171,7 +262,7 @@ def quickstart(
     )
     typer.echo("")
     typer.echo("Reports to open:")
-    typer.echo("  reports/cpu/optimization_report.md")
+    typer.echo("  reports/start/optimization_report.md")
     typer.echo("  reports/sample/optimization_report.md")
     typer.echo("")
     typer.echo("Safety: LambdaOpt does not mutate production Lambda configuration by default.")
@@ -267,7 +358,7 @@ def _resolve_profile(profile: str | None) -> str | None:
     return profile or cli_config.default_profile
 
 
-@app.command()
+@app.command(rich_help_panel="Core workflows")
 def tune(
     p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
     monthly_requests: Annotated[
@@ -379,7 +470,7 @@ def tune(
     _print_summary(recommendation, p95, output_dir)
 
 
-@app.command()
+@app.command(rich_help_panel="Start here")
 def simulate(
     workload: Annotated[
         WorkloadName,
@@ -425,7 +516,7 @@ def simulate(
     _print_summary(recommendation, p95, output_dir)
 
 
-@app.command()
+@app.command(rich_help_panel="Advanced")
 def plan(
     function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
     p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
@@ -454,7 +545,7 @@ def plan(
     )
 
 
-@app.command()
+@app.command(rich_help_panel="Advanced")
 def bench(
     function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
     trials: Annotated[int, typer.Option("--trials", min=1, help="Measured invocations.")] = 50,
@@ -528,7 +619,7 @@ def bench(
     _print_summary(recommendation, p95, output_dir)
 
 
-@app.command()
+@app.command(rich_help_panel="Core workflows")
 def analyze(
     function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
     window: Annotated[
@@ -553,67 +644,17 @@ def analyze(
 ) -> None:
     """Analyze production Lambda CloudWatch metrics without changing anything."""
     try:
-        start_time, end_time, period_seconds = parse_window(window)
         effective_region = _resolve_region(region)
         effective_profile = _resolve_profile(profile)
-        lambda_client = lambda_client_factory(profile=effective_profile, region=effective_region)
-        cloudwatch_client = cloudwatch_client_factory(
-            profile=effective_profile,
-            region=effective_region,
-        )
-        function_configuration = lambda_client.get_function_configuration(function_name)
-        metrics = cloudwatch_client.fetch_lambda_metrics(
+        analysis = _run_cloudwatch_analysis_workflow(
             function_name=function_name,
-            start_time=start_time,
-            end_time=end_time,
-            period_seconds=period_seconds,
-        )
-        cold_start_analysis = None
-        log_warnings: list[str] = []
-        if include_logs:
-            try:
-                logs_client = logs_client_factory(
-                    profile=effective_profile,
-                    region=effective_region,
-                )
-                report_logs = logs_client.fetch_lambda_report_logs(
-                    function_name=function_name,
-                    start_time=start_time,
-                    end_time=end_time,
-                )
-                cold_start_analysis = analyze_cold_starts_from_messages(
-                    [log.message for log in report_logs],
-                    observed_p95_ms=_latest_metric_value(metrics, "duration_p95"),
-                    observed_p99_ms=_latest_metric_value(metrics, "duration_p99"),
-                )
-            except LambdaOptError as exc:
-                log_warnings.append(f"CloudWatch Logs cold-start analysis was skipped: {exc}")
-        analysis = analyze_cloudwatch_metrics(
-            metrics=metrics,
-            current_config=function_configuration.config,
+            window=window,
             target_p95_ms=p95,
+            region=effective_region,
+            profile=effective_profile,
             monthly_requests=monthly_requests,
-            window_label=window,
-            cold_start_analysis=cold_start_analysis,
-        )
-        if log_warnings:
-            analysis = analysis.model_copy(update={"warnings": [*analysis.warnings, *log_warnings]})
-        output_dir.mkdir(parents=True, exist_ok=True)
-        write_cloudwatch_analysis_report(
-            analysis=analysis,
-            current_config=function_configuration.config,
-            target_p95_ms=p95,
-            monthly_requests=monthly_requests,
+            include_logs=include_logs,
             output_dir=output_dir,
-        )
-        (output_dir / "cloudwatch_analysis.json").write_text(
-            json.dumps(
-                redact_value(analysis.model_dump(mode="json")),
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
         )
     except LambdaOptError as exc:
         _handle_cli_error(exc)
@@ -623,7 +664,7 @@ def analyze(
     typer.echo(f"Reports written to {output_dir}")
 
 
-@app.command()
+@app.command(rich_help_panel="Advanced")
 def watch(
     function_name: Annotated[str, typer.Argument(help="Lambda function name or ARN.")],
     p95: Annotated[float, typer.Option("--p95", min=0.0, help="Target p95 latency in ms.")],
@@ -694,7 +735,7 @@ def watch(
     typer.echo("No production infrastructure was mutated.")
 
 
-@app.command()
+@app.command(rich_help_panel="Advanced")
 def dashboard(
     report_dir: Annotated[
         Path,
@@ -715,7 +756,7 @@ def dashboard(
         _handle_cli_error(exc)
 
 
-@app.command()
+@app.command(rich_help_panel="Start here")
 def doctor(
     function_name: Annotated[
         str | None,
@@ -815,6 +856,280 @@ def _cloudwatch_slo_status(slo_passed: bool | None) -> str:
     if slo_passed is False:
         return "risky"
     return "unknown"
+
+
+def _run_start_local_demo(
+    *,
+    target_p95_ms: float,
+    monthly_requests: int,
+    output_dir: Path,
+) -> Recommendation:
+    doctor_result = run_doctor(output_dir=output_dir)
+    if doctor_result.overall_status == "fail":
+        raise LambdaOptConfigError("Local environment is not ready. Run `lambdaopt doctor`.")
+
+    benchmark_results, simulator_warnings = replay_workload(
+        workload="cpu-bound",
+        samples=DEFAULT_SAMPLE_COUNT,
+        seed=DEFAULT_SEED,
+    )
+    return _run_local_optimization_workflow(
+        benchmark_results=benchmark_results,
+        target_p95_ms=target_p95_ms,
+        monthly_requests=monthly_requests,
+        output_dir=output_dir,
+        output_format="both",
+        extra_warnings=[
+            "Local demo generated from deterministic synthetic benchmark data.",
+            *simulator_warnings,
+        ],
+    )
+
+
+def _print_start_local_summary(
+    recommendation: Recommendation,
+    target_p95_ms: float,
+    output_dir: Path,
+) -> None:
+    config = recommendation.recommended_config
+    typer.echo("LambdaOpt Start")
+    typer.echo("")
+    typer.echo("PASS  Local environment ready")
+    typer.echo("PASS  Demo optimization completed")
+    typer.echo(f"PASS  Report written: {output_dir / 'optimization_report.md'}")
+    typer.echo("")
+    typer.echo(
+        "Recommendation: "
+        f"{config.memory_mb}MB {config.architecture} for p95 <= {target_p95_ms:g}ms."
+    )
+    typer.echo("")
+    typer.echo("Next:")
+    typer.echo("  Open the report above, or run against a sandbox Lambda:")
+    typer.echo("  lambdaopt start my-function --region us-east-1 --p95 500")
+    typer.echo("")
+    typer.echo("Safety: this local path does not call AWS or mutate infrastructure.")
+
+
+def _print_start_aws_summary(
+    *,
+    function_name: str,
+    target_p95_ms: float,
+    region: str | None,
+    output_dir: Path,
+    doctor_result: DoctorResult,
+    include_logs: bool,
+) -> None:
+    status_label = {
+        "pass": "READY",
+        "warn": "READY WITH WARNINGS",
+        "fail": "NOT READY",
+    }[doctor_result.overall_status]
+    typer.echo("LambdaOpt Start")
+    typer.echo("")
+    typer.echo(f"Readiness: {status_label}")
+    for check in _important_start_checks(doctor_result):
+        typer.echo(f"{check.status.upper():<5} {check.message}")
+
+    typer.echo("")
+    if doctor_result.overall_status == "fail":
+        typer.echo("Next:")
+        typer.echo("  Fix the failed checks above, or generate a least-privilege policy:")
+        typer.echo(
+            "  "
+            + _iam_generate_command(
+                function_name=function_name,
+                region=region,
+                include_logs=include_logs,
+                target_mode="analyze-with-logs" if include_logs else "analyze",
+            )
+        )
+    else:
+        typer.echo("Next:")
+        typer.echo("  Analyze production metrics without mutation:")
+        typer.echo(
+            "  "
+            + _analyze_command(
+                function_name=function_name,
+                region=region,
+                target_p95_ms=target_p95_ms,
+                output_dir=output_dir,
+                include_logs=include_logs,
+            )
+        )
+        typer.echo("")
+        typer.echo("  Or let start run that analysis now:")
+        typer.echo(
+            "  "
+            + _start_run_analyze_command(
+                function_name=function_name,
+                region=region,
+                target_p95_ms=target_p95_ms,
+                include_logs=include_logs,
+            )
+        )
+
+    typer.echo("")
+    typer.echo("Safety: start does not invoke Lambda or mutate AWS unless --run-analyze is used,")
+    typer.echo("and --run-analyze reads CloudWatch only.")
+
+
+def _print_start_analyze_summary(
+    *,
+    function_name: str,
+    window: str,
+    output_dir: Path,
+    analysis_status: CloudWatchAnalysis,
+) -> None:
+    typer.echo("LambdaOpt Start")
+    typer.echo("")
+    typer.echo(f"PASS  CloudWatch analysis completed for {function_name} over {window}")
+    typer.echo(f"PASS  Report written: {output_dir / 'optimization_report.md'}")
+    typer.echo(f"SLO health: {_cloudwatch_slo_status(analysis_status.slo_passed)}")
+    typer.echo("")
+    typer.echo("Next:")
+    typer.echo(
+        "  Review the report and run benchmark workflows only on non-production test targets."
+    )
+    typer.echo("Safety: no Lambda configuration was changed.")
+
+
+def _important_start_checks(doctor_result: DoctorResult) -> list[DoctorCheck]:
+    important_names = {
+        "credentials",
+        "caller_identity",
+        "region",
+        "function",
+        "lambda_get_config",
+        "metrics",
+        "logs",
+    }
+    return [check for check in doctor_result.checks if check.name in important_names]
+
+
+def _iam_generate_command(
+    *,
+    function_name: str,
+    region: str | None,
+    include_logs: bool,
+    target_mode: str,
+) -> str:
+    command = (
+        "lambdaopt iam generate "
+        f"--mode {target_mode} "
+        f"--function {function_name} "
+        f"--region {region or 'us-east-1'} "
+        "--account-id ACCOUNT_ID"
+    )
+    if include_logs and target_mode == "watch-dry-run":
+        command += " --include-logs"
+    return command
+
+
+def _analyze_command(
+    *,
+    function_name: str,
+    region: str | None,
+    target_p95_ms: float,
+    output_dir: Path,
+    include_logs: bool,
+) -> str:
+    command = (
+        f"lambdaopt analyze {function_name} --window 24h --p95 {target_p95_ms:g} "
+        f"--region {region or 'us-east-1'} --output {output_dir}"
+    )
+    if include_logs:
+        command += " --include-logs"
+    return command
+
+
+def _start_run_analyze_command(
+    *,
+    function_name: str,
+    region: str | None,
+    target_p95_ms: float,
+    include_logs: bool,
+) -> str:
+    command = (
+        f"lambdaopt start {function_name} --region {region or 'us-east-1'} "
+        f"--p95 {target_p95_ms:g} --run-analyze"
+    )
+    if include_logs:
+        command += " --include-logs"
+    return command
+
+
+def _run_cloudwatch_analysis_workflow(
+    *,
+    function_name: str,
+    window: str,
+    target_p95_ms: float,
+    region: str | None,
+    profile: str | None,
+    monthly_requests: int,
+    include_logs: bool,
+    output_dir: Path,
+) -> CloudWatchAnalysis:
+    start_time, end_time, period_seconds = parse_window(window)
+    lambda_client = lambda_client_factory(profile=profile, region=region)
+    cloudwatch_client = cloudwatch_client_factory(
+        profile=profile,
+        region=region,
+    )
+    function_configuration = lambda_client.get_function_configuration(function_name)
+    metrics = cloudwatch_client.fetch_lambda_metrics(
+        function_name=function_name,
+        start_time=start_time,
+        end_time=end_time,
+        period_seconds=period_seconds,
+    )
+    cold_start_analysis = None
+    log_warnings: list[str] = []
+    if include_logs:
+        try:
+            logs_client = logs_client_factory(
+                profile=profile,
+                region=region,
+            )
+            report_logs = logs_client.fetch_lambda_report_logs(
+                function_name=function_name,
+                start_time=start_time,
+                end_time=end_time,
+            )
+            cold_start_analysis = analyze_cold_starts_from_messages(
+                [log.message for log in report_logs],
+                observed_p95_ms=_latest_metric_value(metrics, "duration_p95"),
+                observed_p99_ms=_latest_metric_value(metrics, "duration_p99"),
+            )
+        except LambdaOptError as exc:
+            log_warnings.append(f"CloudWatch Logs cold-start analysis was skipped: {exc}")
+    analysis = analyze_cloudwatch_metrics(
+        metrics=metrics,
+        current_config=function_configuration.config,
+        target_p95_ms=target_p95_ms,
+        monthly_requests=monthly_requests,
+        window_label=window,
+        cold_start_analysis=cold_start_analysis,
+    )
+    if log_warnings:
+        analysis = analysis.model_copy(update={"warnings": [*analysis.warnings, *log_warnings]})
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_cloudwatch_analysis_report(
+        analysis=analysis,
+        current_config=function_configuration.config,
+        target_p95_ms=target_p95_ms,
+        monthly_requests=monthly_requests,
+        output_dir=output_dir,
+    )
+    (output_dir / "cloudwatch_analysis.json").write_text(
+        json.dumps(
+            redact_value(analysis.model_dump(mode="json")),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return analysis
 
 
 def _latest_metric_value(metrics: LambdaCloudWatchMetrics, metric_id: str) -> float | None:

@@ -13,7 +13,7 @@ LambdaOpt is a production-oriented CLI for evaluating AWS Lambda performance, co
 
 ## Current Release
 
-Current release: `v0.2.0 beta`.
+Current release: `v0.2.1 beta`.
 
 This beta is intended for local evaluation, report generation, read-only AWS analysis, current-config benchmarking, and non-production smoke testing. It is not an automatic production mutation system.
 
@@ -45,7 +45,7 @@ flowchart LR
 
 The AWS layer is isolated from the optimizer. Benchmark data, CloudWatch metrics, and cold-start signals are converted into typed domain models before recommendation logic runs.
 
-## Quickstart
+## Start Here
 
 Install from PyPI:
 
@@ -63,19 +63,31 @@ source .venv/bin/activate
 python -m pip install -e ".[dev,aws,charts]"
 ```
 
-Ask LambdaOpt what to run first:
+Run the guided first step:
 
 ```bash
-lambdaopt quickstart
+lambdaopt start
 ```
 
-With no AWS account yet, start with local checks and simulation:
+This creates a local demo report without AWS credentials:
 
 ```bash
-lambdaopt doctor
-lambdaopt simulate --workload cpu-bound --p95 500 --monthly-requests 1000000 --output reports/cpu
-lambdaopt tune --input examples/sample_results.json --p95 500 --monthly-requests 1000000 --output reports/sample
+reports/start/optimization_report.md
 ```
+
+For a sandbox or non-production Lambda, let LambdaOpt check readiness and tell you the next safe command:
+
+```bash
+lambdaopt start my-function --region us-east-1 --p95 500
+```
+
+If readiness passes and you want `start` to run read-only CloudWatch analysis:
+
+```bash
+lambdaopt start my-function --region us-east-1 --p95 500 --run-analyze
+```
+
+Prefer explicit commands? Use these common workflows:
 
 Run a synthetic workload with no AWS credentials:
 
@@ -89,6 +101,14 @@ Tune from local benchmark results:
 lambdaopt tune --input examples/sample_results.json --p95 500 --monthly-requests 1000000 --output reports/sample
 ```
 
+Analyze CloudWatch metrics and cold-start logs:
+
+```bash
+lambdaopt analyze my-function --window 24h --p95 500 --region us-east-1 --include-logs --output reports/analyze
+```
+
+Advanced workflows:
+
 Plan a benchmark from read-only Lambda metadata:
 
 ```bash
@@ -99,12 +119,6 @@ Benchmark the currently deployed configuration:
 
 ```bash
 lambdaopt bench my-function --trials 50 --payload examples/payload.json --region us-east-1 --output reports/bench-current
-```
-
-Analyze CloudWatch metrics and cold-start logs:
-
-```bash
-lambdaopt analyze my-function --window 24h --p95 500 --region us-east-1 --include-logs --output reports/analyze
 ```
 
 Run a dry-run controller evaluation:
@@ -123,6 +137,12 @@ Generate least-privilege IAM policy JSON:
 
 ```bash
 lambdaopt iam generate --mode analyze-with-logs --function my-function --region us-east-1 --account-id 123456789012
+```
+
+To print the route without running anything, use:
+
+```bash
+lambdaopt quickstart
 ```
 
 ## Sample Output
@@ -256,7 +276,7 @@ The PyPI publishing workflow uses Trusted Publishing and does not store PyPI API
 
 ## Status
 
-LambdaOpt is a `v0.2.0` production beta. The local optimizer, simulator, report generation, SLO risk scoring, read-only AWS metadata planning, current-config benchmarking, separate test-function candidate benchmarking, CloudWatch analysis, cold-start analysis, provisioned concurrency recommendation, architecture comparison, and dry-run controller are implemented and tested. Production mutation remains intentionally out of scope.
+LambdaOpt is a `v0.2.1` production beta. The local optimizer, simulator, guided onboarding, report generation, SLO risk scoring, read-only AWS metadata planning, current-config benchmarking, separate test-function candidate benchmarking, CloudWatch analysis, cold-start analysis, provisioned concurrency recommendation, architecture comparison, and dry-run controller are implemented and tested. Production mutation remains intentionally out of scope.
 
 ## Roadmap
 
