@@ -70,6 +70,7 @@ def launch_dashboard(report_dir: Path) -> None:
             "streamlit",
             "run",
             str(app_path),
+            "--server.address=127.0.0.1",
             "--",
             "--report",
             str(report_dir),
