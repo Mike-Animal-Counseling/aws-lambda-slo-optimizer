@@ -285,3 +285,7 @@ Near-term milestones include safer alias-based benchmark workflows, richer SLO p
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Security and deployment
+
+Read the [security policy](SECURITY.md) and [production requirements](docs/PRODUCTION_SECURITY.md) before deployment.
