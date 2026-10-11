@@ -32,3 +32,13 @@ env/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+credentials.json
