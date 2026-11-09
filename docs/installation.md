@@ -4,14 +4,14 @@ LambdaOpt requires Python 3.11 or newer.
 
 ## From Source
 
-Clone the repository and install it in editable mode:
+Clone the repository and install it in a virtual environment.
 
 ```bash
 git clone https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer.git
 cd aws-lambda-slo-optimizer
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install .
 ```
 
 On Windows PowerShell:
@@ -21,7 +21,7 @@ git clone https://github.com/Mike-Animal-Counseling/aws-lambda-slo-optimizer.git
 cd aws-lambda-slo-optimizer
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+python -m pip install .
 ```
 
 For development:
