@@ -90,3 +90,11 @@ LambdaOpt always includes a compatibility warning for arm64 because native depen
 Provisioned concurrency recommendations are based on cold-start rate, p95/p99 behavior, request volume, estimated cost impact, and peak-hour assumptions.
 
 The recommender prefers testing provisioned concurrency during peak windows over assuming always-on capacity is cost-effective. Low traffic workloads may receive warnings when provisioned concurrency cost dominates invocation cost.
+
+## How it relates to AWS Lambda Power Tuning
+
+AWS Lambda Power Tuning runs controlled benchmarks across memory sizes using
+Step Functions. LambdaOpt evaluates benchmark candidates against a p95 target
+and estimates the cost of configurations that pass. Its separate CloudWatch
+workflow uses production metrics and cold-start signals to suggest what to
+investigate or benchmark next.
