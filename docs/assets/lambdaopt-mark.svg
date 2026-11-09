@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">LambdaOpt project mark</title>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="#2C231F" stroke="#6D5143" stroke-width="2"/>
+  <path d="M22 19h5l14 26h5M32 29 21 45" fill="none" stroke="#FFE5CC" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+  <path d="M15 30h8m19 0h7" fill="none" stroke="#FFAA72" stroke-linecap="round" stroke-width="2.5"/>
+</svg>
